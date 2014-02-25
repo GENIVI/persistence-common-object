@@ -1,0 +1,46 @@
+<!--
+*
+* Copyright (C) 2012-2013 Continental Automotive GmbH.
+*
+* Author: guy.sagnes@continental-corporation.com
+*
+* XML model of the dbus interfaces for the test NodeStateMachine
+*
+* This Source Code Form is subject to the terms of the Mozilla Public
+* License, v. 2.0. If a copy of the MPL was not distributed with this
+* file, You can obtain one at http://mozilla.org/MPL/2.0/.
+*
+* Date             Author           Reason
+* 2012.11.27 	   uidu0250 		Initial version
+*
+-->
+<node>
+  <interface name="org.genivi.persistence.admin">
+    <method name="RegisterPersAdminNotification">
+    	<arg name="BusName" type="s" direction="in"/>
+    	<arg name="ObjName" type="s" direction="in"/>
+    	<arg name="NotificationFlag" type="i" direction="in"/>
+    	<arg name="TimeoutMs" type="u" direction="in"/>
+    	<arg name="ErrorCode" type="i" direction="out"/>
+    </method>
+    <method name="UnRegisterPersAdminNotification">
+    	<arg name="BusName" type="s" direction="in"/>
+    	<arg name="ObjName" type="s" direction="in"/>
+    	<arg name="NotificationFlag" type="i" direction="in"/>
+    	<arg name="TimeoutMs" type="u" direction="in"/>
+    	<arg name="ErrorCode" type="i" direction="out"/>
+    </method>
+    <method name="PersistenceAdminRequestCompleted">
+        <arg name="RequestId" type="u" direction="in"/>
+        <arg name="Status" type="i" direction="in"/>
+        <arg name="ErrorCode" type="i" direction="out"/>
+    </method>
+  </interface>
+  <interface name="org.genivi.persistence.adminconsumer">
+    <method name="PersistenceAdminRequest">
+        <arg name="Request" type="i" direction="in"/>
+        <arg name="RequestId" type="i" direction="in"/>
+        <arg name="ErrorCode" type="i" direction="out"/>
+    </method>
+  </interface>
+</node>
