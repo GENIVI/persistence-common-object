@@ -68,10 +68,13 @@ typedef enum PersistencePolicy_e_
 {
    PersistencePolicy_wc    = 0,  /**< the data is managed write cached */
    PersistencePolicy_wt,         /**< the data is managed write through */
-   PersistencePolicy_na,         /**< the data is not applicable */
-
    /** insert new entries here ... */
-   PersistencePolicy_LastEntry         /**< last entry */
+
+   /** make sure this are the last ones, add new enums only before this */
+   PersistencePolicy_cd,		 	/**< configurable default data */
+   PersistencePolicy_d,				/**< default data */
+   PersistencePolicy_na,         /**< the data is not applicable */
+   PersistencePolicy_LastEntry   /**< last entry */
 
 } PersistencePolicy_e;
 
