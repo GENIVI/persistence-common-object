@@ -17,6 +17,7 @@
 * file, You can obtain one at http://mozilla.org/MPL/2.0/.
 *
 * Date       Author             Reason
+* 2014.07.17 ihuerner  5.0.0.0             :  Update of PersistencePolicy_e, added PersistencePolicy_cd and PersistencePolicy_c
 * 2013.04.02 uidl9757  5.0.0.0  CSP_WZ#3321:  Update of PersistenceConfigurationKey_s.permission 
 * 2013.03.21 uidl9757  4.0.0.0  CSP_WZ#2798:  Update of PersistenceConfigurationKey_s 
 * 2013.01.23 uidl9757  3.0.0.0  CSP_WZ#2060:  CoC_SSW:Persistence: common interface to be used by both PCL and PAS 
@@ -41,7 +42,7 @@ extern "C"
 /** \defgroup PERS_RCT_IF_VERSION Interface version
  *  \{
  */
-#define PERS_COM_RESOURCE_CONFIG_TABLE_INTERFACE_VERSION  (0x05000000U)
+#define PERS_COM_RESOURCE_CONFIG_TABLE_INTERFACE_VERSION  (0x05010000U)
 /** \} */ /* end of PERS_RCT_IF_VERSION */
 
 
