@@ -1,0 +1,13 @@
+persistence-common-object ChangeLog
+===================================
+
+Version 1.0.1 25.08.2014
+------------------------
+
+1.	Split of the low level database access.
+	Added separate folders (itzam, sqlite, rawdb) under src, for specific database access implementations.
+	Default database : itzam.
+	Use "./configure --with-sqlite" to build using the SQLITE db. Provide implementation in src/sqlite/pers_low_level_db_access.c
+	based on pers_low_level_db_access_if.h
+	Use "./configure --with-rawdb" to build using the RAWDB db.  Provide implementation in src/rawdb/pers_low_level_db_access.c
+	based on pers_low_level_db_access_if.h

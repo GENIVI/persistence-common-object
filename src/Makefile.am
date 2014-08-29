@@ -3,6 +3,7 @@
 # Copyright (C) 2012 Continental Automotive Systems, Inc.
 #
 # Author: Ana.Chisca@continental-corporation.com
+#         Petrica.Manoila@continental-corporation.com
 #
 # Makefile template for the persistence common library
 #
@@ -16,36 +17,69 @@
 
 ACLOCAL_AMFLAGS=-I m4
 
+# Build objects into the subdirectory of the build directory corresponding to the subdirectory of the source files
+# to avoid conflicts for pers_low_level_db_access.c files for different databases
+AUTOMAKE_OPTIONS = subdir-objects
+
 lib_LTLIBRARIES = libpers_common.la
 
 include_HEADERS= \
-                $(top_srcdir)/inc/protected/persComTypes.h \
-                $(top_srcdir)/inc/protected/persComDataOrg.h \
-                $(top_srcdir)/inc/protected/persComDbAccess.h \
-                $(top_srcdir)/inc/protected/persComErrors.h \
-                $(top_srcdir)/inc/protected/persComRct.h \
-                $(top_srcdir)/inc/protected/persComIpc.h
+                ../inc/protected/persComTypes.h \
+                ../inc/protected/persComDataOrg.h \
+                ../inc/protected/persComDbAccess.h \
+                ../inc/protected/persComErrors.h \
+                ../inc/protected/persComRct.h \
+                ../inc/protected/persComIpc.h
 
 libpers_common_la_CFLAGS = \
-                -I $(top_srcdir)/inc/private -I $(top_srcdir)/inc/protected -I $(top_srcdir)/generated\
+                -I ../inc/private -I ../inc/protected -I ../generated\
                 $(DLT_CFLAGS)           \
                 $(GIO_CFLAGS)           \
                 $(GIO_UNIX_CFLAGS)      \
                 $(GLIB_CFLAGS)          \
                 $(GOBJECT_CFLAGS)       \
-                $(DBUS_CFLAGS)          \
-                $(ITZAM_CFLAGS)
+                $(DBUS_CFLAGS)
+
+if HAVE_ITZAM
+libpers_common_la_CFLAGS += \
+                             $(ITZAM_CFLAGS)
+endif
+
+if HAVE_SQLITE
+libpers_common_la_CFLAGS += \
+                            $(SQLITE_CFLAGS)
+endif
+
+if HAVE_RAWDB
+libpers_common_la_CFLAGS += \
+                            $(RAWDB_CFLAGS)
+endif
 
 libpers_common_la_SOURCES = \
-            $(top_srcdir)/generated/PasClientNotificationGen.c\
-            $(top_srcdir)/src/pers_data_organization.c\
-            $(top_srcdir)/src/pers_local_shared_db_access.c\
-            $(top_srcdir)/src/pers_low_level_db_access.c\
-            $(top_srcdir)/src/pers_resource_config_table.c\
-            $(top_srcdir)/src/pers_ipc.c\
-            $(top_srcdir)/src/pers_ipc_dbus.c
+            ../generated/PasClientNotificationGen.c\
+            ../src/pers_data_organization.c\
+            ../src/pers_local_shared_db_access.c\
+            ../src/pers_resource_config_table.c\
+            ../src/pers_ipc.c\
+            ../src/pers_ipc_dbus.c
+
+if HAVE_ITZAM
+libpers_common_la_SOURCES += \
+                              ../src/itzam/pers_low_level_db_access.c
+endif
+
+if HAVE_SQLITE
+libpers_common_la_SOURCES += \
+                              ../src/sqlite/pers_low_level_db_access.c
+endif
+
+if HAVE_RAWDB
+libpers_common_la_SOURCES += \
+                              ../src/rawdb/pers_low_level_db_access.c
+endif
 
 libpers_common_la_LDFLAGS = -version-info $(GENERIC_LIBRARY_VERSION)
+
 
 libpers_common_la_LIBADD = \
                             $(DLT_LIBS)             \
@@ -53,18 +87,32 @@ libpers_common_la_LIBADD = \
                             $(GIO_UNIX_LIBS)        \
                             $(GLIB_LIBS)            \
                             $(DBUS_LIBS)            \
-                            $(GOBJECT_LIBS)         \
-                            $(ITZAM_LIBS)
+                            $(GOBJECT_LIBS)
 
-dbuspolicy_DATA = $(top_srcdir)/dbus_config/org.genivi.persistence.admin.conf
+if HAVE_ITZAM
+libpers_common_la_LIBADD += \
+                             $(ITZAM_LIBS)
+endif
+
+if HAVE_SQLITE
+libpers_common_la_LIBADD += \
+                             $(SQLITE_LIBS)
+endif
+
+if HAVE_RAWDB
+libpers_common_la_LIBADD += \
+                             $(RAWDB_LIBS)
+endif
+
+dbuspolicy_DATA = ../dbus_config/org.genivi.persistence.admin.conf
 
 # Export interface description of org.genivi.persistence.admin DBus interface
-dbusinterfaces_DATA = $(top_srcdir)/dbus_specifications/org.genivi.persistence.admin.xml
+dbusinterfaces_DATA = ../dbus_specifications/org.genivi.persistence.admin.xml
 
 EXTRA_DIST = $(dbuspolicy_DATA) \
              $(dbusinterfaces_DATA) 
 
 # pkgconfig
 pkgconfigdir = $(libdir)/pkgconfig
-pkgconfig_DATA = $(top_srcdir)/pkgconfig/libperscommon.pc
+pkgconfig_DATA = ../pkgconfig/libperscommon.pc
 

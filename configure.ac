@@ -3,6 +3,7 @@
 # Copyright (C) 2012 Continental Automotive Systems, Inc.
 #
 # Author: Ana.Chisca@continental-corporation.com
+#         Petrica.Manoila@continental-corporation.com
 #
 # Configure template for the persistence-common library
 #
@@ -89,8 +90,47 @@ PKG_CHECK_MODULES([GIO], [gio-2.0 >= 2.30.0])
 PKG_CHECK_MODULES([GIO_UNIX], [gio-unix-2.0 >= 2.30.0])
 PKG_CHECK_MODULES([GLIB], [glib-2.0 >= 2.30.0])
 PKG_CHECK_MODULES([DLT], [automotive-dlt >= 2.2.0])
-PKG_CHECK_MODULES([ITZAM], [libitzam >= 6.0.4])
-ITZAM_LIBS="-litzam"
+
+dnl *************************************
+dnl ***      Database support         ***
+dnl *************************************
+
+AC_ARG_WITH([database],
+    AS_HELP_STRING([--with-database=auto|itzam|sqlite|rawdb],[Choose database backend.]),[],[with_database=auto])
+
+dnl ********** ITZAM **********
+AS_IF([test "x$with_database" = "xauto" -o "x$with_database" = "xitzam"],
+    [PKG_CHECK_MODULES(ITZAM, [ libitzam >= 6.0.4 ], HAVE_ITZAM=1, HAVE_ITZAM=0)],
+    HAVE_ITZAM=0)
+AS_IF([test "x$HAVE_ITZAM" = "x1"], with_database=itzam)
+AS_IF([test "x$HAVE_ITZAM" = "x1"], ITZAM_LIBS="-litzam")
+AS_IF([test "x$with_database" = "xitzam" -a "x$HAVE_ITZAM" = "x0"],
+    [AC_MSG_ERROR([*** itzam not found])])
+
+AM_CONDITIONAL([HAVE_ITZAM], [test "x$HAVE_ITZAM" = x1])
+
+dnl ********** SQLITE **********
+AS_IF([test "x$with_database" = "xauto" -o "x$with_database" = "xsqlite"],
+    [PKG_CHECK_MODULES(SQLITE, [sqlite3 >= 3.7.5], HAVE_SQLITE=1, HAVE_SQLITE=0)],
+    HAVE_SQLITE=0)
+AS_IF([test "x$HAVE_SQLITE" = "x1"], with_database=sqlite)
+AS_IF([test "x$with_database" = "xsqlite" -a "x$HAVE_SQLITE" = "x0"],
+    [AC_MSG_ERROR([*** sqlite not found])])
+
+AM_CONDITIONAL([HAVE_SQLITE], [test "x$HAVE_SQLITE" = x1])
+
+dnl ********** RAWDB **********
+AS_IF([test "x$with_database" = "xauto" -o "x$with_database" = "xrawdb"],
+    HAVE_RAWDB=1,
+    HAVE_RAWDB=0)
+AS_IF([test "x$HAVE_RAWDB" = "x1"], with_database=rawdb)
+AS_IF([test "x$with_database" = "xrawdb" -a "x$HAVE_RAWDB" = "x0"],
+    [AC_MSG_ERROR([*** rawdb not found])])
+
+AM_CONDITIONAL([HAVE_RAWDB], [test "x$HAVE_RAWDB" = x1])
+
+AS_IF([test "x$HAVE_ITZAM" != x1 -a "x$HAVE_SQLITE" != x1 -a "x$HAVE_RAWDB" != x1],
+    AC_MSG_ERROR([*** missing database backend]))
 
 dnl *************************************
 dnl *** Define extra paths            ***
