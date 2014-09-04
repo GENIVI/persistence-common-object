@@ -17,3 +17,7 @@
 # Build trough subfolders. Make sure "generated" is called before "src".
 ACLOCAL_AMFLAGS=-I m4
 SUBDIRS = generated src
+
+if WANT_TESTS
+SUBDIRS+=test
+endif
