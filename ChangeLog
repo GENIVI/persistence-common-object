@@ -1,6 +1,12 @@
 persistence-common-object ChangeLog
 ===================================
 
+Version 1.0.2 16.09.2014
+------------------------
+1.	Updated protected IF persComTypes.h :
+	- Allow support of the standard C99 instead of redeclaration.
+2.	Separated lib version from package version in configuration.
+
 Version 1.0.1 25.08.2014
 ------------------------
 

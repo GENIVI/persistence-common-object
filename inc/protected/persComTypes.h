@@ -5,7 +5,7 @@
 *
 * Copyright (C) 2012 Continental Automotive Systems, Inc.
 *
-* Author: Ionut.Ieremie@continental-corporation.com
+* Author: Ionut.Ieremie@continental-corporation.com, guy.sagnes@continental-corporation.com
 *
 * Interface: protected - Type and constant definitions.
 *
@@ -17,11 +17,16 @@
 * file, You can obtain one at http://mozilla.org/MPL/2.0/.
 *
 * Date       Author             Reason
-* 2013.02.05 uidl9757  1.0.0.0  CSP_WZ#TODO:  CoC_SSW:Persistence:  interface that defines type and constants
+* 2014.09.12 uid66235  1.0.1.0  GENIVI:allow support of the standard C99 instead of redeclaration
+* 2013.02.05 uidl9757  1.0.0.0  CoC_SSW:Persistence:  interface that defines type and constants
 *
 **********************************************************************************************************************/
 
 #include <stdbool.h>
+
+#ifdef _ISOC99_SOURCE
+#include <stdint.h>
+#endif
 
 #ifndef char_t
 typedef char char_t ;
@@ -74,10 +79,12 @@ typedef __s16 INT16;
 typedef __s32 INT32;
 typedef __s64 INT64;
 
+#ifndef _ISOC99_SOURCE
 typedef __u8  uint8_t;
 typedef __u16 uint16_t;
 typedef __u32 uint32_t;
 typedef __u64 uint64_t;
+#endif
 
 /**
  * \brief 8 bit signed

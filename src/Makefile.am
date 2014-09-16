@@ -78,7 +78,7 @@ libpers_common_la_SOURCES += \
                               ../src/rawdb/pers_low_level_db_access.c
 endif
 
-libpers_common_la_LDFLAGS = -version-info $(GENERIC_LIBRARY_VERSION)
+libpers_common_la_LDFLAGS = -version-info $(PERSCOMMON_LIB_VERSION)
 
 
 libpers_common_la_LIBADD = \

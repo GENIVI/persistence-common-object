@@ -19,8 +19,8 @@ dnl **************************************************************************
 dnl *** First, define all of the version numbers up front                  ***
 dnl *** In particular, this allows the version macro to be used in AC_INIT ***
 dnl **************************************************************************
-m4_define([LIBPERSOCOMMON_VERSION_S],[1.0.1])
-m4_define([LIBPERSOCOMMON_VERSION_N],[1000001])
+m4_define([PERSCOMMON_PACKAGE_VERSION_S],[1.0.2])
+m4_define([PERSCOMMON_LIB_VERSION_N],[1001001])
 
 dnl ***************************
 dnl *** Initialize autoconf ***
@@ -40,11 +40,11 @@ AC_SUBST([ACLOCAL_AMFLAGS], ["$ACLOCAL_FLAGS -I m4"])
 dnl *********************************
 dnl *** Shared library versioning ***
 dnl *********************************
-PERSCOMMON_MAJOR=$((((LIBPERSOCOMMON_VERSION_N() / 1000) / 1000) % 1000 ))
-PERSCOMMON_MINOR=$(( (LIBPERSOCOMMON_VERSION_N() / 1000) % 1000 ))
-PERSCOMMON_MICRO=$((  LIBPERSOCOMMON_VERSION_N() % 1000 ))
-GENERIC_LIBRARY_VERSION=$PERSCOMMON_MAJOR:$PERSCOMMON_MINOR:$PERSCOMMON_MICRO
-AC_SUBST(GENERIC_LIBRARY_VERSION)
+PERSCOMMON_LIB_VERSION_CURRENT=$((((PERSCOMMON_LIB_VERSION_N() / 1000) / 1000) % 1000 ))
+PERSCOMMON_LIB_VERSION_REVISION=$(( (PERSCOMMON_LIB_VERSION_N() / 1000) % 1000 ))
+PERSCOMMON_LIB_VERSION_AGE=$((  PERSCOMMON_LIB_VERSION_N() % 1000 ))
+PERSCOMMON_LIB_VERSION=$PERSCOMMON_LIB_VERSION_CURRENT:$PERSCOMMON_LIB_VERSION_REVISION:$PERSCOMMON_LIB_VERSION_AGE
+AC_SUBST(PERSCOMMON_LIB_VERSION)
 
 dnl ********************************
 dnl *** Check for basic programs ***
