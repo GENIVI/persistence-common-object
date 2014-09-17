@@ -96,7 +96,7 @@ dnl ***      Database support         ***
 dnl *************************************
 
 AC_ARG_WITH([database],
-    AS_HELP_STRING([--with-database=auto|itzam|sqlite|rawdb],[Choose database backend.]),[],[with_database=auto])
+    AS_HELP_STRING([--with-database=auto|itzam|sqlite|rawdb|key-value-store],[Choose database backend.]),[],[with_database=auto])
 
 dnl ********** ITZAM **********
 AS_IF([test "x$with_database" = "xauto" -o "x$with_database" = "xitzam"],
@@ -129,8 +129,68 @@ AS_IF([test "x$with_database" = "xrawdb" -a "x$HAVE_RAWDB" = "x0"],
 
 AM_CONDITIONAL([HAVE_RAWDB], [test "x$HAVE_RAWDB" = x1])
 
-AS_IF([test "x$HAVE_ITZAM" != x1 -a "x$HAVE_SQLITE" != x1 -a "x$HAVE_RAWDB" != x1],
+dnl ********** KEY-VALUE-STORE **********
+AS_IF([test "x$with_database" = "xauto" -o "x$with_database" = "xkey-value-store"],
+    HAVE_KVS=1,
+    HAVE_KVS=0)
+AS_IF([test "x$HAVE_KVS" = "x1"], with_database=key-value-store)
+AS_IF([test "x$with_database" = "xkey-value-store" -a "x$HAVE_KVS" = "x0"],
+    [AC_MSG_ERROR([*** key-value-store not found])])
+
+AM_CONDITIONAL([HAVE_KVS], [test "x$HAVE_KVS" = x1])
+
+AS_IF([test "x$HAVE_ITZAM" != x1 -a "x$HAVE_SQLITE" != x1 -a "x$HAVE_RAWDB" != x1 -a "x$HAVE_KVS" != x1],
     AC_MSG_ERROR([*** missing database backend]))
+
+
+
+dnl ***************************************
+dnl *** Check if test should be enabled ***
+dnl ***************************************
+AC_ARG_ENABLE([tests],
+              [AS_HELP_STRING([--enable-tests],[Enable tests])],
+              [enable_tests=$enableval],[enable_tests="no"])
+
+AM_CONDITIONAL([WANT_TESTS], [test x"$enable_tests" = "xyes"])
+# look if check framework exists
+AC_ARG_WITH([localcheck],
+              [AS_HELP_STRING([--with-localcheck],[Path to local check])],
+              [localcheck=$withval],[localcheck=""])
+
+if test "x$enable_tests" != "xno" ; then
+   if test -z "$localcheck" ; then
+      PKG_CHECK_MODULES(CHECK, check)
+   else
+      CHECK_CFLAGS="-I$localcheck/include"
+      CHECK_LIBS="-L$localcheck/lib -lcheck"
+   fi
+   AC_SUBST(CHECK_CFLAGS)
+   AC_SUBST(CHECK_LIBS)
+
+   AC_DEFINE_UNQUOTED([TESTS_ENABLED], [1], [tests enabled])
+else
+   AC_DEFINE_UNQUOTED([TESTS_ENABLED], [0], [tests enabled])
+fi
+AC_MSG_NOTICE([Tests enabled: $enable_tests])
+AC_MSG_NOTICE([Local check enabled: $localcheck])
+
+
+dnl **********************************************
+dnl *** compile with debug information enabled ***
+dnl **********************************************
+AC_ARG_ENABLE(debug,
+AS_HELP_STRING([--enable-debug],
+               [enable debugging, default: no]),
+[case "${enableval}" in
+             yes) debug=true ;;
+             no)  debug=false ;;
+             *)   AC_MSG_ERROR([bad value ${enableval} for --enable-debug]) ;;
+esac],
+[debug=false])
+
+AM_CONDITIONAL(DEBUG, test x"$debug" = x"true")
+
+
 
 dnl *************************************
 dnl *** Define extra paths            ***
@@ -151,7 +211,7 @@ AC_SUBST([dbusinterfacesdir], [$with_dbusinterfacesdir])
 dnl *******************************
 dnl *** Define configure output ***
 dnl *******************************
-AC_CONFIG_FILES(Makefile src/Makefile generated/Makefile pkgconfig/libperscommon.pc)
+AC_CONFIG_FILES(Makefile src/Makefile test/Makefile generated/Makefile pkgconfig/libperscommon.pc)
 
 AC_OUTPUT
 

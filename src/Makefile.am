@@ -78,6 +78,17 @@ libpers_common_la_SOURCES += \
                               ../src/rawdb/pers_low_level_db_access.c
 endif
 
+if HAVE_KVS
+libpers_common_la_SOURCES += \
+                              ../src/key-value-store/pers_low_level_db_access.c \
+                              ../src/key-value-store/crc32.c \
+                              ../src/key-value-store/database/kissdb.c \
+                              ../src/key-value-store/hashtable/md5c.c \
+                              ../src/key-value-store/hashtable/qhash.c \
+                              ../src/key-value-store/hashtable/qhasharr.c
+endif
+
+
 libpers_common_la_LDFLAGS = -version-info $(PERSCOMMON_LIB_VERSION)
 
 
