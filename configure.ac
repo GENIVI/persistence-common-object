@@ -25,7 +25,7 @@ m4_define([PERSCOMMON_LIB_VERSION_N],[1001001])
 dnl ***************************
 dnl *** Initialize autoconf ***
 dnl ***************************
-AC_INIT([persistence-common],[LIBPERSOCOMMON_VERSION_S()])
+AC_INIT([persistence-common],[PERSCOMMON_PACKAGE_VERSION_S])
 AC_COPYRIGHT([Copyright (c) 2012 Continental Automotive GmbH])
 AC_PREREQ([2.50])
 
