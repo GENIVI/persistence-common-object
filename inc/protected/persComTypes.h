@@ -83,7 +83,7 @@ typedef __s64 INT64;
 typedef __u8  uint8_t;
 typedef __u16 uint16_t;
 typedef __u32 uint32_t;
-typedef __u64 uint64_t;
+//typedef __u64 uint64_t;
 #endif
 
 /**
@@ -203,7 +203,7 @@ typedef sint32_t* psint32_t;
 /**
  * \brief Pointer to UNSIGNED-64-Bit
  */
-typedef uint64_t* puint64_t;
+//typedef uint64_t* puint64_t;
 /**
  * \brief Pointer to SIGNED-64-Bit
  */
