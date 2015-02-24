@@ -118,53 +118,16 @@ unsigned int pcoCrc32(unsigned int crc, const unsigned char *buf, size_t theSize
    p = buf;
    crc = crc ^ ~0U;
 
-   if(p != 0)
+   if (p != 0)
    {
-      while(theSize--)
+      while (theSize--)
       {
-	     unsigned int idx = (crc ^ *p++) & 0xFF;
+         unsigned int idx = (crc ^ *p++) & 0xFF;
 
-	     if(idx < crc32_array_size)
-		     crc = crc32_tab[idx] ^ (crc >> 8);
+         if (idx < crc32_array_size)
+            crc = crc32_tab[idx] ^ (crc >> 8);
       }
       rval = crc ^ ~0U;
    }
    return rval;
 }
-
-
-int pcoCalcCrc32Csum(int fd, int startOffset)
-{
-   int rval = 1;
-   char* buf;
-   struct stat statBuf;
-   unsigned int crc = 0;
-
-   fstat(fd, &statBuf);
-   buf = malloc((unsigned int) statBuf.st_size- startOffset);
-
-   if (buf != 0)
-   {
-      memset(buf, 0, statBuf.st_size- startOffset);
-      off_t curPos = 0;
-      // remember the current position
-      curPos = lseek(fd, 0, SEEK_CUR);
-      // set to start offset
-      lseek(fd, startOffset, SEEK_SET);
-      //printf("FSTAT -> Filesize: %d \n", (int) statBuf.st_size);
-      if( read(fd, buf, statBuf.st_size- startOffset) != statBuf.st_size- startOffset)
-         return -1;
-      crc = 0;
-      crc = pcoCrc32(crc, (unsigned char*) buf, statBuf.st_size- startOffset);
-      rval = crc;
-      // set back to the position
-      lseek(fd, curPos, SEEK_SET);
-      free(buf);
-   }
-   else
-      rval = -1;
-   return rval;
-}
-
-
-

@@ -1,8 +1,10 @@
 /**********************************************************************************************************************
 *
 * Copyright (C) 2012 Continental Automotive Systems, Inc.
+* Copyright (C) 2014 XS Embedded GmbH
 *
 * Author: Ionut.Ieremie@continental-corporation.com
+*         simon.disch@xse.de
 *
 * Implementation of persComDbAccess.h
 *
@@ -26,6 +28,16 @@
 #include "pers_low_level_db_access_if.h"
 #include "persComDbAccess.h"
 #include "persComErrors.h"
+
+/**
+* \brief returns the max DB key data size
+*
+* \return the size
+*/
+int persComDbgetMaxKeyValueSize(void)
+{
+   return PERS_DB_MAX_SIZE_KEY_DATA;
+}
 
 /**
  * \brief Obtain a handler to DB indicated by dbPathname

@@ -44,13 +44,20 @@ extern "C"
  */
 /* maximum data size for a key type resourceID */
 #define PERS_DB_MAX_LENGTH_KEY_NAME 128   /**< Max. length of the key identifier */
-#define PERS_DB_MAX_SIZE_KEY_DATA   16384 /**< Max. size of the key entry (slot definition) */
-/** \} */ 
+#define PERS_DB_MAX_SIZE_KEY_DATA   8028 /**< Max. size of the key entry (slot definition) */
+/** \} */
 
 
 /** \defgroup PERS_DB_ACCESS_FUNCTIONS Functions
  *  \{
  */
+
+ /**
+ * \brief returns the max DB key data size
+ *
+ * \return the size
+ */
+int persComDbgetMaxKeyValueSize(void);
 
 
 /**

@@ -54,7 +54,7 @@ extern "C" {
 #define _Q_HASHARR_VALUESIZE (32)  /*!< knob for maximum data size in a slot. */
 
 #define PERS_CACHE_MAX_SLOTS 100000 /**< Max. number of slots in the cache */
-#define PERS_CACHE_MEMSIZE (sizeof(qhasharr_data_t)+ (sizeof(qhasharr_slot_t) * (PERS_CACHE_MAX_SLOTS))) //approximately 2 MB
+#define PERS_CACHE_MEMSIZE (sizeof(qhasharr_data_t)+ (sizeof(qhasharr_slot_t) * (PERS_CACHE_MAX_SLOTS)))
 
 /* types */
 typedef struct qhasharr_slot_s qhasharr_slot_t;
@@ -64,7 +64,7 @@ typedef struct qhasharr_s qhasharr_t;
 /* public functions */
 extern qhasharr_t *qhasharr(void *memory, size_t memsize);
 extern size_t qhasharr_calculate_memsize(int max);
-
+extern void setMemoryAddress(void* memory, qhasharr_t *tbl);
 /**
  * qhasharr internal data slot structure
  */

@@ -55,6 +55,8 @@ extern "C"
 #define PERS_COM_ERR_ACCESS_DENIED             (PERS_COM_ERROR_CODE - 7)        //!< Insufficient rights to perform opperation
 #define PERS_COM_ERR_OUT_OF_MEMORY             (PERS_COM_ERROR_CODE - 8)        //!< Not enough resources for an opperation
 
+#define PERS_COM_ERR_READONLY                  (PERS_COM_ERROR_CODE - 9)        //!< Database was opened in readonly mode and cannot be written
+
 /* IPC specific error codes */
 #define	PERS_COM_IPC_ERR_PCL_NOT_AVAILABLE	   (PERS_COM_ERROR_CODE - 255)		//!< PCL client not available (application was killed)
 /* end of IPC specific error codes */
