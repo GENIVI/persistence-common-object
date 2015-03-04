@@ -6,6 +6,7 @@
 * Copyright (C) 2012 Continental Automotive Systems, Inc.
 *
 * Author: Ionut.Ieremie@continental-corporation.com
+*         guy.sagnes@continental-corporation.com
 *
 * Interface: protected - Access to local and shared DBs   
 *
@@ -17,7 +18,11 @@
 * file, You can obtain one at http://mozilla.org/MPL/2.0/.
 *
 * Date       Author             Reason
-* 2013.01.23 uidl9757  4.0.0.0  CSP_WZ#2798:  Change PERS_DB_MAX_SIZE_KEY_DATA to 16KB 
+* 2015.03.05 uid66235  5.0.0.0  merge of the interface extension provided by MentorGraphic:
+*                               - Default Max size of the key descreased to 8KiB
+*                               - add function persComDbgetMaxKeyValueSize()
+*                               - add bitfield definition for persComDbOpen() bOption: create, write through, read only
+* 2013.01.23 uidl9757  4.0.0.0  CSP_WZ#2798:  Change PERS_DB_MAX_SIZE_KEY_DATA to 16KiB 
 * 2013.01.23 uidl9757  3.0.0.0  CSP_WZ#2060:  CoC_SSW:Persistence: common interface to be used by both PCL and PAS 
 *
 **********************************************************************************************************************/
@@ -34,7 +39,7 @@ extern "C"
 /** \defgroup PERS_DB_ACCESS_IF_VERSION Interface version
  *  \{
  */
-#define PERS_COM_DB_ACCESS_INTERFACE_VERSION  (0x04000000U)
+#define PERS_COM_DB_ACCESS_INTERFACE_VERSION  (0x05000000U)
 /** \} */ 
 
 
@@ -44,7 +49,7 @@ extern "C"
  */
 /* maximum data size for a key type resourceID */
 #define PERS_DB_MAX_LENGTH_KEY_NAME 128   /**< Max. length of the key identifier */
-#define PERS_DB_MAX_SIZE_KEY_DATA   8028 /**< Max. size of the key entry (slot definition) */
+#define PERS_DB_MAX_SIZE_KEY_DATA   8028  /**< Max. size of the key entry (slot definition) */
 /** \} */
 
 
@@ -53,9 +58,9 @@ extern "C"
  */
 
  /**
- * \brief returns the max DB key data size
- *
- * \return the size
+ * \brief returns the max key data size supported in the database
+ * \remarks: the key with higher size should be managed as file or splitted
+ * \return max size in byte
  */
 int persComDbgetMaxKeyValueSize(void);
 
@@ -64,12 +69,12 @@ int persComDbgetMaxKeyValueSize(void);
  * \brief Obtain a handler to DB indicated by dbPathname
  * \note : DB is created if it does not exist and (bForceCreationIfNotPresent != 0)
  *
- * \param dbPathname                    [in] absolute path to database (length limited to \ref PERS_ORG_MAX_LENGTH_PATH_FILENAME)
- * \param bForceCreationIfNotPresent    [in] if !=0x0, the database is created if it does not exist
- *
+ * \param dbPathname    [in] absolute path to database (length limited to \ref PERS_ORG_MAX_LENGTH_PATH_FILENAME)
+ * \param bOption       [in] bitfield option: 0x01: create if not exists, 0x02: write through, 0x04: read only
+ * \Remarks the support of the option depends from backend database realisation
  * \return >= 0 for valid handler, negative value for error (\ref PERS_COM_ERROR_CODES_DEFINES)
  */
-signed int persComDbOpen(char const * dbPathname, unsigned char bForceCreationIfNotPresent) ;
+signed int persComDbOpen(char const * dbPathname, unsigned char bOption);
 
 /**
  * \brief Close handler to DB

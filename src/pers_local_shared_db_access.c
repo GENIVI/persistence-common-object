@@ -13,6 +13,9 @@
 * file, You can obtain one at http://mozilla.org/MPL/2.0/.
 *
 * Date             Author              Reason
+* 2015.03.04       uid66235            5.0.0.0  merge of the interface extension provided by MentorGraphic:
+*                                       - Default Max size of the key descreased to 8KiB
+*                                       - add function persComDbgetMaxKeyValueSize()
 * 2013.02.05       uidl9757            CSP_WZ#2220:  Adaptation for open source
 * 2013.01.03       uidl9757            CSP_WZ#2060:  Remove "cursor" interface
 * 2012.12.17       uidl9757            CSP_WZ#2060:  Changes to allow optimized access to DB
@@ -29,11 +32,11 @@
 #include "persComDbAccess.h"
 #include "persComErrors.h"
 
-/**
-* \brief returns the max DB key data size
-*
-* \return the size
-*/
+ /**
+ * \brief returns the max key data size supported in the database
+ * \remarks the key with higher size should be managed as file or splitted
+ * \return max size in byte
+ */
 int persComDbgetMaxKeyValueSize(void)
 {
    return PERS_DB_MAX_SIZE_KEY_DATA;
@@ -43,12 +46,12 @@ int persComDbgetMaxKeyValueSize(void)
  * \brief Obtain a handler to DB indicated by dbPathname
  * \note : DB is created if it does not exist and (bForceCreationIfNotPresent != 0)
  *
- * \param dbPathname                    [in] absolute path to database (length limited to \ref PERS_ORG_MAX_LENGTH_PATH_FILENAME)
- * \param bForceCreationIfNotPresent    [in] if !=0x0, the database is created if it does not exist
- *
+ * \param dbPathname    [in] absolute path to database (length limited to \ref PERS_ORG_MAX_LENGTH_PATH_FILENAME)
+ * \param bOption       [in] bitfield option: 0x01: create if not exists, 0x02: write through, 0x04: read only
+ * \Remarks the support of the option depends from backend database realisation
  * \return >= 0 for valid handler, negative value for error (\ref PERS_COM_ERROR_CODES_DEFINES)
  */
-signed int persComDbOpen(char const * dbPathname, unsigned char bForceCreationIfNotPresent)
+signed int persComDbOpen(char const * dbPathname, unsigned char bOption)
 {
     sint_t iErrCode = PERS_COM_SUCCESS ;
 
@@ -66,7 +69,7 @@ signed int persComDbOpen(char const * dbPathname, unsigned char bForceCreationIf
 
     if(PERS_COM_SUCCESS == iErrCode)
     {
-        iErrCode = pers_lldb_open(dbPathname, PersLldbPurpose_DB, bForceCreationIfNotPresent) ;
+        iErrCode = pers_lldb_open(dbPathname, PersLldbPurpose_DB, bOption);
     }
 
     return iErrCode ;
