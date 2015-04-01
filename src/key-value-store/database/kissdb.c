@@ -1532,7 +1532,7 @@ int verifyHashtableCS(KISSDB* db)
       ptr += offset;
 
       //get number of hashtables in file (search for hashtable delimiters) and copy the hashtables to memory
-      while (offset <= (statBuf.st_size - db->htSizeBytes)) //begin with offset for first hashtable
+      while (offset <= ((int64_t)statBuf.st_size - (int64_t)db->htSizeBytes)) //begin with offset for first hashtable
       {
          hashtable = (Hashtable_s*) ptr;
          //if at least one of two hashtable delimiters are found
