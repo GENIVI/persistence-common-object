@@ -655,14 +655,6 @@ static int _get_idx(qhasharr_t *tbl, const char *key, unsigned int hash) {
                         {
                             return idx;
                         }
-                    } else {
-                        // key is truncated, compare MD5 also.
-                        unsigned char keymd5[16];
-                        qhashmd5(key, keylen, keymd5);
-                        if (!memcmp(key, data->slots[idx].data.pair.key, _Q_HASHARR_KEYSIZE) && !memcmp(keymd5, data->slots[idx].data.pair.keymd5, 16))
-                        {
-                            return idx;
-                        }
                     }
                 }
             }
@@ -741,14 +733,11 @@ static bool _put_data(qhasharr_t *tbl, int idx, unsigned int hash,
     }
 
     size_t keylen = strlen(key);
-    unsigned char keymd5[16];
-    qhashmd5(key, keylen, keymd5);
 
     // store key
     data->slots[idx].count = count;
     data->slots[idx].hash = hash;
     strncpy(data->slots[idx].data.pair.key, key, _Q_HASHARR_KEYSIZE);
-    memcpy((char *) data->slots[idx].data.pair.keymd5, (char *) keymd5, 16);
     data->slots[idx].data.pair.keylen = keylen;
     data->slots[idx].link = -1;
 

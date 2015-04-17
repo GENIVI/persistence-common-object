@@ -43,43 +43,7 @@
 #include <errno.h>
 #include <sys/types.h>
 #include <sys/stat.h>
-#include "md5.h"
 #include "qhash.h"
-
-/**
- * Calculate 128-bit(16-bytes) MD5 hash.
- *
- * @param data      source object
- * @param nbytes    size of data
- * @param retbuf    user buffer. It must be at leat 16-bytes long.
- *
- * @return true if successful, otherwise false.
- *
- * @code
- *   // get MD5
- *   unsigned char md5hash[16];
- *   qhashmd5((void*)"hello", 5, md5hash);
- *
- *   // hex encode
- *   char *md5ascii = qhex_encode(md5hash, 16);
- *   printf("Hex encoded MD5: %s\n", md5ascii);
- *   free(md5ascii);
- * @endcode
- */
-bool qhashmd5(const void *data, size_t nbytes, void *retbuf) {
-    if (data == NULL || retbuf == NULL) {
-        errno = EINVAL;
-        return false;
-    }
-
-    MD5_CTX context;
-    MD5Init(&context);
-    MD5Update(&context, (unsigned char *) data, (unsigned int) nbytes);
-    MD5Final(retbuf, &context);
-
-    return true;
-}
-
 
 /**
  * Get 32-bit Murmur3 hash.
