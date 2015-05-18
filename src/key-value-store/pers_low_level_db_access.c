@@ -301,7 +301,7 @@ sint_t pers_lldb_open(str_t const* dbPathname, pers_lldb_purpose_e ePurpose, boo
          else
          {
             DLT_LOG(persComLldbDLTCtx, DLT_LOG_WARN,
-                    DLT_STRING("KISSDB_open: "); DLT_STRING("<"); DLT_STRING(path); DLT_STRING(">, "); DLT_STRING(" retval=<"); DLT_INT(kdbState); DLT_STRING(">"),
+                    DLT_STRING("KISSDB_open: "); DLT_STRING("<"); DLT_STRING(path); DLT_STRING(">, "); DLT_STRING("retval=<"); DLT_INT(kdbState); DLT_STRING(">"),
                     DLT_STRING(strerror(errno)));
          }
          bCanContinue = false;
@@ -423,7 +423,7 @@ sint_t pers_lldb_close(sint_t handlerDB)
       }
 
       DLT_LOG(persComLldbDLTCtx, DLT_LOG_DEBUG,
-              DLT_STRING(LT_HDR); DLT_STRING(__FUNCTION__); DLT_STRING(":"); DLT_STRING("Closing database  =<"); DLT_STRING(pLldbHandler->dbPathname); DLT_STRING(">, "));
+              DLT_STRING(LT_HDR); DLT_STRING(__FUNCTION__); DLT_STRING(":"); DLT_STRING("Closing database <"); DLT_STRING(pLldbHandler->dbPathname); DLT_STRING(">"));
 
       Kdb_wrlock(&db->shared->rwlock);         //lock acces to shared status information
 
@@ -1364,7 +1364,7 @@ static sint_t SetDataInKissRCT(sint_t dbHandler, pconststr_t key, PersistenceCon
    }
 
    DLT_LOG(persComLldbDLTCtx, DLT_LOG_DEBUG,
-           DLT_STRING(LT_HDR); DLT_STRING(__FUNCTION__); DLT_STRING(":"); DLT_STRING("dbHandler="); DLT_INT(dbHandler); DLT_STRING("key=<<"); DLT_STRING(key); DLT_STRING(">, "); DLT_STRING("retval=<");
+           DLT_STRING(LT_HDR); DLT_STRING(__FUNCTION__); DLT_STRING(":"); DLT_STRING("dbHandler="); DLT_INT(dbHandler); DLT_STRING("key=<"); DLT_STRING(key); DLT_STRING(">, "); DLT_STRING("retval=<");
            DLT_INT(bytesWritten); DLT_STRING(">"));
 
    return bytesWritten;
@@ -2125,7 +2125,7 @@ sint_t deleteFromCache(KISSDB* db, char* metaKey)
             else
             {
                DLT_LOG(persComLldbDLTCtx, DLT_LOG_ERROR,
-                     DLT_STRING(__FUNCTION__); DLT_STRING(":"); DLT_STRING("KISSDB_get:  key=<"); DLT_STRING(metaKey); DLT_STRING(">, "); DLT_STRING("failed with retval=<"); DLT_INT(status); DLT_STRING(">"));
+                     DLT_STRING(__FUNCTION__); DLT_STRING(":"); DLT_STRING("KISSDB_get: key=<"); DLT_STRING(metaKey); DLT_STRING(">, "); DLT_STRING("failed with retval=<"); DLT_INT(status); DLT_STRING(">"));
             }
          }
       }
