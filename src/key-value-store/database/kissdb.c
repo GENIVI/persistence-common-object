@@ -1310,6 +1310,7 @@ int KISSDB_Iterator_next(KISSDB_Iterator* dbi, void* kbuf, void* vbuf)
 {
    DataBlock_s* block;
    Hashtable_slot_s* ht;
+   int retVal = KISSDB_ITERATOR_NEXT_ITEM_NOT_FOUND;
    int64_t offset;
 
    if(dbi->db->htMappedSize < dbi->db->shared->htShmSize)
@@ -1347,7 +1348,7 @@ int KISSDB_Iterator_next(KISSDB_Iterator* dbi, void* kbuf, void* vbuf)
             dbi->h_idx = 0;
             if (++dbi->h_no >= (dbi->db->shared->htNum))
             {
-               return 0;
+               return KISSDB_ITERATOR_NEXT_ITEM_NOT_FOUND;//0
             }
             else
             {
@@ -1369,20 +1370,29 @@ int KISSDB_Iterator_next(KISSDB_Iterator* dbi, void* kbuf, void* vbuf)
          return KISSDB_ERROR_IO;
       }
 
-      block = (DataBlock_s*) (dbi->db->mappedDb + offset);
-      memcpy(kbuf,block->key, dbi->db->keySize);
-      if (vbuf != NULL)
+      retVal = KISSDB_ITERATOR_NEXT_ITEM_FOUND;
+      if (offset >= 0)
+      {                    
+          block = (DataBlock_s*) (dbi->db->mappedDb + offset);
+          memcpy(kbuf,block->key, dbi->db->keySize);
+
+          if (vbuf != NULL)
+          {
+             memcpy(vbuf, block->value, dbi->db->valSize);
+          }
+      }     
+      else
       {
-         memcpy(vbuf, block->value, dbi->db->valSize);
+          retVal = KISSDB_ITERATOR_DELETED_ITEM;
       }
       if (++dbi->h_idx >= dbi->db->htSize)
       {
          dbi->h_idx = 0;
          ++dbi->h_no;
       }
-      return 1;
+      return retVal;//1
    }
-   return 0;
+   return KISSDB_ITERATOR_NEXT_ITEM_NOT_FOUND;//0
 }
 
 

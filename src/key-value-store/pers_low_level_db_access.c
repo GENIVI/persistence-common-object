@@ -2156,6 +2156,7 @@ sint_t getListandSize(KISSDB* db, pstr_t buffer, sint_t size, bool_t bOnlySizeNe
    qnobj_t obj;
    sint_t availableSize = size;
    void* pt;
+   int iter_ret_val;
 
    int keylength = (purpose == PersLldbPurpose_RCT) ? PERS_RCT_MAX_LENGTH_RESOURCE_ID : PERS_DB_MAX_LENGTH_KEY_NAME;
    char kbuf[PERS_DB_MAX_LENGTH_KEY_NAME];
@@ -2203,10 +2204,13 @@ sint_t getListandSize(KISSDB* db, pstr_t buffer, sint_t size, bool_t bOnlySizeNe
    //look for keys in database file
    //Initialise database iterator
    KISSDB_Iterator_init(db, &dbi);
-   //get number of keys, stored in database file
-   while (KISSDB_Iterator_next(&dbi, &kbuf, NULL) > 0)
+   //get number of keys, stored in database file    
+   while ( (iter_ret_val = KISSDB_Iterator_next(&dbi, &kbuf, NULL)) > 0)
    {
-      keyCountFile++;
+      if (iter_ret_val == KISSDB_ITERATOR_NEXT_ITEM_FOUND)
+      {      
+            keyCountFile++;
+      }
    }
 
    if ((keyCountCache + keyCountFile) > 0)
@@ -2238,12 +2242,15 @@ sint_t getListandSize(KISSDB* db, pstr_t buffer, sint_t size, bool_t bOnlySizeNe
          //put keys in database file to hashtable (existing key gets overwritten -> no duplicate keys)
          KISSDB_Iterator_init(db, &dbi);
          memset(kbuf, 0, keylength);
-         while (KISSDB_Iterator_next(&dbi, &kbuf, NULL) > 0)
+         while ( (iter_ret_val = KISSDB_Iterator_next(&dbi, &kbuf, NULL)) > 0)
          {
-            size_t keyLen = strnlen(kbuf, sizeof(kbuf));
-            if (keyLen > 0)
+            if (iter_ret_val == KISSDB_ITERATOR_NEXT_ITEM_FOUND)
             {
-               tbl->put(tbl, kbuf, "0", 1);
+                size_t keyLen = strnlen(kbuf, sizeof(kbuf));
+                if (keyLen > 0)
+                {
+                   tbl->put(tbl, kbuf, "0", 1);
+                }
             }
          }
 

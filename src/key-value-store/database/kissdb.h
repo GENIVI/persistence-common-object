@@ -171,6 +171,20 @@ typedef struct {
         int fd; //local fd
 } KISSDB;
 
+/**
+ * Next item not found
+ */    
+#define KISSDB_ITERATOR_NEXT_ITEM_NOT_FOUND 0 
+    
+/**
+ * Next item found
+ */    
+#define KISSDB_ITERATOR_NEXT_ITEM_FOUND 1 
+    
+/**
+ * deleted or invalidated data found
+ */    
+#define KISSDB_ITERATOR_DELETED_ITEM 2 
 
 /**
  * I/O error or file not found
@@ -231,6 +245,7 @@ typedef struct {
  * buffer where data should be returned is too small
  */
 #define KISSDB_ERROR_WRONG_BUFSIZE -13
+   
 
 /**
  * Open mode: read only
