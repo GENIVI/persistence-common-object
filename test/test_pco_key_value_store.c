@@ -658,6 +658,66 @@ START_TEST(test_GetKeyListSizeLocalDB)
    {
       printf("persComDbClose() failed: [%d] \n", ret);
    }
+   handle = -1;
+   fail_unless(ret == 0, "Failed to close database file: retval: [%d]", ret);
+
+   //
+   // open again
+   //
+   handle = persComDbOpen("/tmp/localdb-size-keylist.db", 0x1); //create db if not present
+   fail_unless(handle >= 0, "Failed to create non existent lDB for keylist test: retval: [%d]", ret);
+
+
+   //read list size again (must be 32)
+   listSize = persComDbGetSizeKeysList(handle);
+   //printf("LISTSIZE: %d \n", listSize);
+   fail_unless(listSize == 4 * strlen(key) + 4, "Wrong list size read from combined cache / file");
+
+   snprintf(key, 8, "%s", "key_123");
+   ret = persComDbDeleteKey(handle, key);
+   fail_unless(ret >= 0, "Failed to delete key: %s - %d", key, ret);
+
+
+   //read list size again (must be 32)
+   listSize = persComDbGetSizeKeysList(handle);
+   //printf("LISTSIZE: %d \n", listSize);
+   fail_unless(listSize == 4 * strlen(key) + 4, "Wrong list size read from combined cache / file");
+
+   ret = persComDbClose(handle);
+   if (ret != 0)
+   {
+      printf("persComDbClose() failed: [%d] \n", ret);
+   }
+   handle = -1;
+   fail_unless(ret == 0, "Failed to close database file: retval: [%d]", ret);
+
+
+   //
+   // open again
+   //
+   handle = persComDbOpen("/tmp/localdb-size-keylist.db", 0x1); //create db if not present
+   fail_unless(handle >= 0, "Failed to create non existent lDB for keylist test: retval: [%d]", ret);
+
+   //read list size again (must be 24)
+   listSize = persComDbGetSizeKeysList(handle);
+   //printf("LISTSIZE: %d \n", listSize);
+   fail_unless(listSize == 3 * strlen(key) + 3, "Wrong list size read from combined cache / file");
+
+   snprintf(key, 8, "%s", "key_123");
+   ret = persComDbWriteKey(handle, key, (char*) sysTimeBuffer, strlen(sysTimeBuffer));
+   fail_unless(ret == strlen(sysTimeBuffer), "Wrong write size");
+
+   //read list size again (must be 32)
+   listSize = persComDbGetSizeKeysList(handle);
+   //printf("LISTSIZE: %d \n", listSize);
+   fail_unless(listSize == 4 * strlen(key) + 4, "Wrong list size read from combined cache / file");
+
+   ret = persComDbClose(handle);
+   if (ret != 0)
+   {
+      printf("persComDbClose() failed: [%d] \n", ret);
+   }
+   handle = -1;
    fail_unless(ret == 0, "Failed to close database file: retval: [%d]", ret);
 
 #endif
