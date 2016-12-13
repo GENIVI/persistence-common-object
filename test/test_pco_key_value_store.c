@@ -681,7 +681,7 @@ START_TEST(test_GetKeyListSizeLocalDB)
    //read list size again (must be 32)
    listSize = persComDbGetSizeKeysList(handle);
    //printf("LISTSIZE: %d \n", listSize);
-   fail_unless(listSize == 4 * strlen(key) + 4, "Wrong list size read from combined cache / file");
+   fail_unless(listSize == 3 * strlen(key) + 3, "Wrong list size read from combined cache / file");
 
    ret = persComDbClose(handle);
    if (ret != 0)

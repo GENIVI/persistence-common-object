@@ -86,6 +86,8 @@ typedef struct
       uint16_t writeMode;
       Kdb_bool cacheCreated; /* flag to indicate if the shared cache was created */
       pthread_rwlock_t rwlock;
+      pthread_mutex_t mutex;
+      Kdb_bool mutexInit;
       uint64_t mappedDbSize; /* shared information about current mapped size of database file */
 } Shared_Data_s;
 

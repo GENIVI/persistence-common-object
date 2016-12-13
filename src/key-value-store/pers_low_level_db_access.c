@@ -120,7 +120,6 @@ static const char ListItemsSeparator = '\0';
 /* shared by all the threads within a process */
 static lldb_handlers_s g_sHandlers; // initialize to 0 and NULL
 //static lldb_handlers_s g_sHandlers = { { { 0 } } };
-static pthread_mutex_t g_mutexLldb = PTHREAD_MUTEX_INITIALIZER;
 
 /* ---------------------- local macros  --------------------------------- */
 
@@ -143,8 +142,9 @@ static sint_t getFromCache(KISSDB* db, void* metaKey, void* readBuffer, sint_t b
 static sint_t getFromDatabaseFile(KISSDB* db, void* metaKey, void* readBuffer, sint_t bufsize);
 
 /* access to resources shared by the threads within a process */
-static bool_t lldb_handles_Lock(void);
-static bool_t lldb_handles_Unlock(void);
+static bool_t lldb_handles_InitLock(pthread_mutex_t *mutex);
+static bool_t lldb_handles_Lock(pthread_mutex_t *mutex);
+static bool_t lldb_handles_Unlock(pthread_mutex_t *mutex);
 static lldb_handler_s* lldb_handles_FindInUseHandle(sint_t dbHandler);
 static lldb_handler_s* lldb_handles_FindAvailableHandle(void);
 static void lldb_handles_InitHandle(lldb_handler_s* psHandle_inout, pers_lldb_purpose_e ePurpose, str_t const* dbPathname);
@@ -200,19 +200,11 @@ sint_t pers_lldb_open(str_t const* dbPathname, pers_lldb_purpose_e ePurpose, boo
            DLT_STRING(LT_HDR); DLT_STRING(__FUNCTION__); DLT_STRING("Begin opening:"); DLT_STRING("<"); DLT_STRING(dbPathname); DLT_STRING(">, ");
            ((PersLldbPurpose_RCT == ePurpose) ? DLT_STRING("RCT, ") : DLT_STRING("DB, ")); ((true == bForceCreationIfNotPresent) ? DLT_STRING("forced, ") : DLT_STRING("unforced, ")));
 
-   if (lldb_handles_Lock())
-   {
-      bLocked = true;
-      pLldbHandler = lldb_handles_FindAvailableHandle();
-      if (NIL == pLldbHandler)
-      {
-         bCanContinue = false;
-         returnValue = PERS_COM_ERR_OUT_OF_MEMORY;
-      }
-   }
-   else
+   pLldbHandler = lldb_handles_FindAvailableHandle();
+   if (NIL == pLldbHandler)
    {
       bCanContinue = false;
+      returnValue = PERS_COM_ERR_OUT_OF_MEMORY;
    }
    if (bCanContinue)
    {
@@ -309,6 +301,19 @@ sint_t pers_lldb_open(str_t const* dbPathname, pers_lldb_purpose_e ePurpose, boo
    }
    if (kdbState == 0)
    {
+      KISSDB* db = &pLldbHandler->kissDb;
+      if (!db->shared->mutexInit)
+      {
+         /* Initialize a robust mutex */
+         lldb_handles_InitLock(&db->shared->mutex);
+         db->shared->mutexInit = true;
+      }
+
+      if (lldb_handles_Lock(&db->shared->mutex))
+      {
+         bLocked = true;
+      }
+
       pLldbHandler->kissDb.shared->refCount++; //increment reference to opened databases
       if (-1 == sem_post(pLldbHandler->kissDb.kdbSem)) //release semaphore
       {
@@ -347,11 +352,15 @@ sint_t pers_lldb_open(str_t const* dbPathname, pers_lldb_purpose_e ePurpose, boo
       returnValue = PERS_COM_FAILURE;
       (void) lldb_handles_DeinitHandle(pLldbHandler->dbHandler);
    }
-   if (bLocked)
-   {
-      (void) lldb_handles_Unlock();
-   }
 
+   if (bCanContinue)
+   {
+      if (bLocked)
+      {
+         KISSDB* db = &pLldbHandler->kissDb;
+         (void) lldb_handles_Unlock(&db->shared->mutex);
+      }
+   }
 
    DLT_LOG(persComLldbDLTCtx, DLT_LOG_DEBUG, DLT_STRING(LT_HDR), DLT_STRING(__FUNCTION__), DLT_STRING("End of open for:"), DLT_STRING("<"),
            DLT_STRING(dbPathname), DLT_STRING(">, "), ((PersLldbPurpose_RCT == ePurpose) ? DLT_STRING("RCT, ") : DLT_STRING("DB, ")),
@@ -397,15 +406,11 @@ sint_t pers_lldb_close(sint_t handlerDB)
 
    if (handlerDB >= 0)
    {
-      if (lldb_handles_Lock())
-      {
-         bLocked = true;
-         pLldbHandler = lldb_handles_FindInUseHandle(handlerDB);
+      pLldbHandler = lldb_handles_FindInUseHandle(handlerDB);
 
-         if (NIL == pLldbHandler)
-         {
-            returnValue = PERS_COM_FAILURE;
-         }
+      if (NIL == pLldbHandler)
+      {
+         returnValue = PERS_COM_FAILURE;
       }
    }
    else
@@ -416,6 +421,11 @@ sint_t pers_lldb_close(sint_t handlerDB)
    if (PERS_COM_SUCCESS == returnValue)
    {
       KISSDB* db = &pLldbHandler->kissDb;
+      if (lldb_handles_Lock(&db->shared->mutex))
+      {
+         bLocked = true;
+      }
+
       if (-1 == sem_wait(db->kdbSem))
       {
          DLT_LOG(persComLldbDLTCtx, DLT_LOG_ERROR, DLT_STRING(__FUNCTION__); DLT_STRING(": sem_wait() in close failed: "),
@@ -500,6 +510,12 @@ sint_t pers_lldb_close(sint_t handlerDB)
       //no cache exists
       Kdb_unlock(&db->shared->rwlock);
 
+      if (bLocked)
+      {
+         KISSDB* db = &pLldbHandler->kissDb;
+         (void) lldb_handles_Unlock(&db->shared->mutex);
+      }
+
 #ifdef __showTimeMeasurements
       clock_gettime(CLOCK_ID, &kdbStart);
 #endif
@@ -536,11 +552,6 @@ sint_t pers_lldb_close(sint_t handlerDB)
          }
          returnValue = PERS_COM_FAILURE;
       }
-   }
-
-   if (bLocked)
-   {
-      (void) lldb_handles_Unlock();
    }
 
    DLT_LOG(persComLldbDLTCtx, DLT_LOG_DEBUG,
@@ -950,14 +961,10 @@ static sint_t DeleteDataFromKissDB(sint_t dbHandler, pconststr_t key)
 
    if ((dbHandler >= 0) && (NIL != key))
    {
-      if (lldb_handles_Lock())
+      pLldbHandler = lldb_handles_FindInUseHandle(dbHandler);
+      if (NIL == pLldbHandler)
       {
-         bLocked = true;
-         pLldbHandler = lldb_handles_FindInUseHandle(dbHandler);
-         if (NIL == pLldbHandler)
-         {
-            bCanContinue = false;
-         }
+         bCanContinue = false;
       }
    }
    else
@@ -965,9 +972,14 @@ static sint_t DeleteDataFromKissDB(sint_t dbHandler, pconststr_t key)
       bCanContinue = false;
    }
 
-
    if (bCanContinue)
    {
+      KISSDB* db = &pLldbHandler->kissDb;
+      if (lldb_handles_Lock(&db->shared->mutex))
+      {
+         bLocked = true;
+      }
+
       Kdb_wrlock(&pLldbHandler->kissDb.shared->rwlock);
       if ( KISSDB_WRITE_MODE_WC == pLldbHandler->kissDb.shared->writeMode)
       {
@@ -998,7 +1010,8 @@ static sint_t DeleteDataFromKissDB(sint_t dbHandler, pconststr_t key)
 
    if (bLocked)
    {
-      (void) lldb_handles_Unlock();
+      KISSDB* db = &pLldbHandler->kissDb;
+      (void) lldb_handles_Unlock(&db->shared->mutex);
    }
 
    DLT_LOG(persComLldbDLTCtx, DLT_LOG_DEBUG,
@@ -1021,14 +1034,10 @@ static sint_t DeleteDataFromKissRCT(sint_t dbHandler, pconststr_t key)
 
    if ((dbHandler >= 0) && (NIL != key))
    {
-      if (lldb_handles_Lock())
+      pLldbHandler = lldb_handles_FindInUseHandle(dbHandler);
+      if (NIL == pLldbHandler)
       {
-         bLocked = true;
-         pLldbHandler = lldb_handles_FindInUseHandle(dbHandler);
-         if (NIL == pLldbHandler)
-         {
-            bCanContinue = false;
-         }
+         bCanContinue = false;
       }
    }
    else
@@ -1038,6 +1047,12 @@ static sint_t DeleteDataFromKissRCT(sint_t dbHandler, pconststr_t key)
 
    if (bCanContinue)
    {
+      KISSDB* db = &pLldbHandler->kissDb;
+      if (lldb_handles_Lock(&db->shared->mutex))
+      {
+         bLocked = true;
+      }
+
       Kdb_wrlock(&pLldbHandler->kissDb.shared->rwlock);
       if ( KISSDB_WRITE_MODE_WC == pLldbHandler->kissDb.shared->writeMode)
       {
@@ -1067,7 +1082,8 @@ static sint_t DeleteDataFromKissRCT(sint_t dbHandler, pconststr_t key)
 
    if (bLocked)
    {
-      (void) lldb_handles_Unlock();
+      KISSDB* db = &pLldbHandler->kissDb;
+      (void) lldb_handles_Unlock(&db->shared->mutex);
    }
 
    DLT_LOG(persComLldbDLTCtx, DLT_LOG_DEBUG,
@@ -1090,25 +1106,21 @@ static sint_t GetAllKeysFromKissLocalDB(sint_t dbHandler, pstr_t buffer, sint_t 
 
    if (dbHandler >= 0)
    {
-      if (lldb_handles_Lock())
+      pLldbHandler = lldb_handles_FindInUseHandle(dbHandler);
+      if (NIL == pLldbHandler)
       {
-         bLocked = true;
-         pLldbHandler = lldb_handles_FindInUseHandle(dbHandler);
-         if (NIL == pLldbHandler)
+         bCanContinue = false;
+         result = PERS_COM_ERR_INVALID_PARAM;
+      }
+      else
+      {
+         if (PersLldbPurpose_DB != pLldbHandler->ePurpose)
          {
+            /* this would be very bad */
             bCanContinue = false;
-            result = PERS_COM_ERR_INVALID_PARAM;
+            result = PERS_COM_FAILURE;
          }
-         else
-         {
-            if (PersLldbPurpose_DB != pLldbHandler->ePurpose)
-            {
-               /* this would be very bad */
-               bCanContinue = false;
-               result = PERS_COM_FAILURE;
-            }
-            /* to not use DLT while mutex locked */
-         }
+         /* to not use DLT while mutex locked */
       }
    }
    else
@@ -1119,6 +1131,12 @@ static sint_t GetAllKeysFromKissLocalDB(sint_t dbHandler, pstr_t buffer, sint_t 
 
    if (bCanContinue)
    {
+      KISSDB* db = &pLldbHandler->kissDb;
+      if (lldb_handles_Lock(&db->shared->mutex))
+      {
+         bLocked = true;
+      }
+
       if ((buffer != NIL) && (size > 0))
       {
          (void) memset(buffer, 0, (size_t) size);
@@ -1134,7 +1152,8 @@ static sint_t GetAllKeysFromKissLocalDB(sint_t dbHandler, pstr_t buffer, sint_t 
    }
    if (bLocked)
    {
-      (void) lldb_handles_Unlock();
+      KISSDB* db = &pLldbHandler->kissDb;
+      (void) lldb_handles_Unlock(&db->shared->mutex);
    }
 
    DLT_LOG(persComLldbDLTCtx, DLT_LOG_DEBUG,
@@ -1155,25 +1174,21 @@ static sint_t GetAllKeysFromKissRCT(sint_t dbHandler, pstr_t buffer, sint_t size
 
    if (dbHandler >= 0)
    {
-      if (lldb_handles_Lock())
+      pLldbHandler = lldb_handles_FindInUseHandle(dbHandler);
+      if (NIL == pLldbHandler)
       {
-         bLocked = true;
-         pLldbHandler = lldb_handles_FindInUseHandle(dbHandler);
-         if (NIL == pLldbHandler)
+         bCanContinue = false;
+         result = PERS_COM_ERR_INVALID_PARAM;
+      }
+      else
+      {
+         if (PersLldbPurpose_RCT != pLldbHandler->ePurpose)
          {
+            /* this would be very bad */
             bCanContinue = false;
-            result = PERS_COM_ERR_INVALID_PARAM;
+            result = PERS_COM_FAILURE;
          }
-         else
-         {
-            if (PersLldbPurpose_RCT != pLldbHandler->ePurpose)
-            {
-               /* this would be very bad */
-               bCanContinue = false;
-               result = PERS_COM_FAILURE;
-            }
-            /* to not use DLT while mutex locked */
-         }
+         /* to not use DLT while mutex locked */
       }
    }
    else
@@ -1184,6 +1199,12 @@ static sint_t GetAllKeysFromKissRCT(sint_t dbHandler, pstr_t buffer, sint_t size
 
    if (bCanContinue)
    {
+      KISSDB* db = &pLldbHandler->kissDb;
+      if (lldb_handles_Lock(&db->shared->mutex))
+      {
+         bLocked = true;
+      }
+
       if ((buffer != NIL) && (size > 0))
       {
          (void) memset(buffer, 0, (size_t) size);
@@ -1198,7 +1219,8 @@ static sint_t GetAllKeysFromKissRCT(sint_t dbHandler, pstr_t buffer, sint_t size
    }
    if (bLocked)
    {
-      (void) lldb_handles_Unlock();
+      KISSDB* db = &pLldbHandler->kissDb;
+      (void) lldb_handles_Unlock(&db->shared->mutex);
    }
 
    DLT_LOG(persComLldbDLTCtx, DLT_LOG_DEBUG,
@@ -1223,23 +1245,19 @@ static sint_t SetDataInKissLocalDB(sint_t dbHandler, pconststr_t key, pconststr_
 
    if ((dbHandler >= 0) && (NIL != key) && (NIL != data) && (dataSize > 0))
    {
-      if (lldb_handles_Lock())
+      pLldbHandler = lldb_handles_FindInUseHandle(dbHandler);
+      if (NIL == pLldbHandler)
       {
-         bLocked = true;
-         pLldbHandler = lldb_handles_FindInUseHandle(dbHandler);
-         if (NIL == pLldbHandler)
+         bCanContinue = false;
+         bytesWritten = PERS_COM_ERR_INVALID_PARAM;
+      }
+      else
+      {
+         if (PersLldbPurpose_DB != pLldbHandler->ePurpose)
          {
+            /* this would be very bad */
             bCanContinue = false;
-            bytesWritten = PERS_COM_ERR_INVALID_PARAM;
-         }
-         else
-         {
-            if (PersLldbPurpose_DB != pLldbHandler->ePurpose)
-            {
-               /* this would be very bad */
-               bCanContinue = false;
-               bytesWritten = PERS_COM_FAILURE;
-            }
+            bytesWritten = PERS_COM_FAILURE;
          }
       }
    }
@@ -1251,6 +1269,12 @@ static sint_t SetDataInKissLocalDB(sint_t dbHandler, pconststr_t key, pconststr_
 
    if (bCanContinue)
    {
+      KISSDB* db = &pLldbHandler->kissDb;
+      if (lldb_handles_Lock(&db->shared->mutex))
+      {
+         bLocked = true;
+      }
+
       char* metaKey = (char*) key;
       dataCached.eFlag = CachedDataWrite;
       dataCached.m_dataSize = dataSize;
@@ -1278,7 +1302,8 @@ static sint_t SetDataInKissLocalDB(sint_t dbHandler, pconststr_t key, pconststr_
 
    if (bLocked)
    {
-      (void) lldb_handles_Unlock();
+      KISSDB* db = &pLldbHandler->kissDb;
+      (void) lldb_handles_Unlock(&db->shared->mutex);
    }
 
    DLT_LOG(persComLldbDLTCtx, DLT_LOG_DEBUG,
@@ -1302,25 +1327,21 @@ static sint_t SetDataInKissRCT(sint_t dbHandler, pconststr_t key, PersistenceCon
 
    if ((dbHandler >= 0) && (NIL != key) && (NIL != pConfig))
    {
-      if (lldb_handles_Lock())
+      pLldbHandler = lldb_handles_FindInUseHandle(dbHandler);
+      if (NIL == pLldbHandler)
       {
-         bLocked = true;
-         pLldbHandler = lldb_handles_FindInUseHandle(dbHandler);
-         if (NIL == pLldbHandler)
+         bCanContinue = false;
+         bytesWritten = PERS_COM_ERR_INVALID_PARAM;
+      }
+      else
+      {
+         if (PersLldbPurpose_RCT != pLldbHandler->ePurpose)
          {
+            /* this would be very bad */
             bCanContinue = false;
-            bytesWritten = PERS_COM_ERR_INVALID_PARAM;
+            bytesWritten = PERS_COM_FAILURE;
          }
-         else
-         {
-            if (PersLldbPurpose_RCT != pLldbHandler->ePurpose)
-            {
-               /* this would be very bad */
-               bCanContinue = false;
-               bytesWritten = PERS_COM_FAILURE;
-            }
-            /* to not use DLT while mutex locked */
-         }
+         /* to not use DLT while mutex locked */
       }
    }
    else
@@ -1330,6 +1351,12 @@ static sint_t SetDataInKissRCT(sint_t dbHandler, pconststr_t key, PersistenceCon
    }
    if (bCanContinue)
    {
+      KISSDB* db = &pLldbHandler->kissDb;
+      if (lldb_handles_Lock(&db->shared->mutex))
+      {
+         bLocked = true;
+      }
+
       int dataSize = sizeof(PersistenceConfigurationKey_s);
       char* metaKey = (char*) key;
       dataCached.eFlag = CachedDataWrite;
@@ -1360,7 +1387,8 @@ static sint_t SetDataInKissRCT(sint_t dbHandler, pconststr_t key, PersistenceCon
    }
    if (bLocked)
    {
-      (void) lldb_handles_Unlock();
+      KISSDB* db = &pLldbHandler->kissDb;
+      (void) lldb_handles_Unlock(&db->shared->mutex);
    }
 
    DLT_LOG(persComLldbDLTCtx, DLT_LOG_DEBUG,
@@ -1382,23 +1410,20 @@ static sint_t GetKeySizeFromKissLocalDB(sint_t dbHandler, pconststr_t key)
 
    if ((dbHandler >= 0) && (NIL != key))
    {
-      if (lldb_handles_Lock())
+      bLocked = true;
+      pLldbHandler = lldb_handles_FindInUseHandle(dbHandler);
+      if (NIL == pLldbHandler)
       {
-         bLocked = true;
-         pLldbHandler = lldb_handles_FindInUseHandle(dbHandler);
-         if (NIL == pLldbHandler)
+         bCanContinue = false;
+         bytesRead = PERS_COM_ERR_INVALID_PARAM;
+      }
+      else
+      {
+         if (PersLldbPurpose_DB != pLldbHandler->ePurpose)
          {
+            /* this would be very bad */
             bCanContinue = false;
-            bytesRead = PERS_COM_ERR_INVALID_PARAM;
-         }
-         else
-         {
-            if (PersLldbPurpose_DB != pLldbHandler->ePurpose)
-            {
-               /* this would be very bad */
-               bCanContinue = false;
-               bytesRead = PERS_COM_FAILURE;
-            }
+            bytesRead = PERS_COM_FAILURE;
          }
       }
    }
@@ -1409,6 +1434,12 @@ static sint_t GetKeySizeFromKissLocalDB(sint_t dbHandler, pconststr_t key)
    }
    if (bCanContinue)
    {
+      KISSDB* db = &pLldbHandler->kissDb;
+      if (lldb_handles_Lock(&db->shared->mutex))
+      {
+         bLocked = true;
+      }
+
       Kdb_wrlock(&pLldbHandler->kissDb.shared->rwlock);
       if ( KISSDB_WRITE_MODE_WC == pLldbHandler->kissDb.shared->writeMode)
       {
@@ -1426,7 +1457,8 @@ static sint_t GetKeySizeFromKissLocalDB(sint_t dbHandler, pconststr_t key)
    }
    if (bLocked)
    {
-      (void) lldb_handles_Unlock();
+      KISSDB* db = &pLldbHandler->kissDb;
+      (void) lldb_handles_Unlock(&db->shared->mutex);
    }
    DLT_LOG(persComLldbDLTCtx, DLT_LOG_DEBUG,
            DLT_STRING(LT_HDR); DLT_STRING(__FUNCTION__); DLT_STRING(":"); DLT_STRING("dbHandler="); DLT_INT(dbHandler); DLT_STRING("key=<"); DLT_STRING(key); DLT_STRING(">, "); DLT_STRING("retval=<");
@@ -1449,25 +1481,21 @@ static sint_t GetDataFromKissLocalDB(sint_t dbHandler, pconststr_t key, pstr_t b
 
    if ((dbHandler >= 0) && (NIL != key) && (NIL != buffer_out) && (bufSize > 0))
    {
-      if (lldb_handles_Lock())
+      pLldbHandler = lldb_handles_FindInUseHandle(dbHandler);
+      if (NIL == pLldbHandler)
       {
-         bLocked = true;
-         pLldbHandler = lldb_handles_FindInUseHandle(dbHandler);
-         if (NIL == pLldbHandler)
+         bCanContinue = false;
+         bytesRead = PERS_COM_ERR_INVALID_PARAM;
+      }
+      else
+      {
+         if (PersLldbPurpose_DB != pLldbHandler->ePurpose)
          {
+            /* this would be very bad */
             bCanContinue = false;
-            bytesRead = PERS_COM_ERR_INVALID_PARAM;
+            bytesRead = PERS_COM_FAILURE;
          }
-         else
-         {
-            if (PersLldbPurpose_DB != pLldbHandler->ePurpose)
-            {
-               /* this would be very bad */
-               bCanContinue = false;
-               bytesRead = PERS_COM_FAILURE;
-            }
-            /* to not use DLT while mutex locked */
-         }
+         /* to not use DLT while mutex locked */
       }
    }
    else
@@ -1478,6 +1506,12 @@ static sint_t GetDataFromKissLocalDB(sint_t dbHandler, pconststr_t key, pstr_t b
 
    if (bCanContinue)
    {
+      KISSDB* db = &pLldbHandler->kissDb;
+      if (lldb_handles_Lock(&db->shared->mutex))
+      {
+         bLocked = true;
+      }
+
       Kdb_wrlock(&pLldbHandler->kissDb.shared->rwlock);
       if ( KISSDB_WRITE_MODE_WC == pLldbHandler->kissDb.shared->writeMode)
       {
@@ -1496,7 +1530,8 @@ static sint_t GetDataFromKissLocalDB(sint_t dbHandler, pconststr_t key, pstr_t b
    }
    if (bLocked)
    {
-      (void) lldb_handles_Unlock();
+      KISSDB* db = &pLldbHandler->kissDb;
+      (void) lldb_handles_Unlock(&db->shared->mutex);
    }
 
    DLT_LOG(persComLldbDLTCtx, DLT_LOG_DEBUG,
@@ -1517,25 +1552,21 @@ static sint_t GetDataFromKissRCT(sint_t dbHandler, pconststr_t key, PersistenceC
 
    if ((dbHandler >= 0) && (NIL != key) && (NIL != pConfig))
    {
-      if (lldb_handles_Lock())
+      pLldbHandler = lldb_handles_FindInUseHandle(dbHandler);
+      if (NIL == pLldbHandler)
       {
-         bLocked = true;
-         pLldbHandler = lldb_handles_FindInUseHandle(dbHandler);
-         if (NIL == pLldbHandler)
+         bCanContinue = false;
+         bytesRead = PERS_COM_ERR_INVALID_PARAM;
+      }
+      else
+      {
+         if (PersLldbPurpose_RCT != pLldbHandler->ePurpose)
          {
+            /* this would be very bad */
             bCanContinue = false;
-            bytesRead = PERS_COM_ERR_INVALID_PARAM;
+            bytesRead = PERS_COM_FAILURE;
          }
-         else
-         {
-            if (PersLldbPurpose_RCT != pLldbHandler->ePurpose)
-            {
-               /* this would be very bad */
-               bCanContinue = false;
-               bytesRead = PERS_COM_FAILURE;
-            }
-            /* to not use DLT while mutex locked */
-         }
+         /* to not use DLT while mutex locked */
       }
    }
    else
@@ -1547,6 +1578,12 @@ static sint_t GetDataFromKissRCT(sint_t dbHandler, pconststr_t key, PersistenceC
    //read RCT
    if (bCanContinue)
    {
+      KISSDB* db = &pLldbHandler->kissDb;
+      if (lldb_handles_Lock(&db->shared->mutex))
+      {
+         bLocked = true;
+      }
+
       Kdb_wrlock(&pLldbHandler->kissDb.shared->rwlock);
       if ( KISSDB_WRITE_MODE_WC == pLldbHandler->kissDb.shared->writeMode)
       {
@@ -1564,7 +1601,8 @@ static sint_t GetDataFromKissRCT(sint_t dbHandler, pconststr_t key, PersistenceC
    }
    if (bLocked)
    {
-      (void) lldb_handles_Unlock();
+      KISSDB* db = &pLldbHandler->kissDb;
+      (void) lldb_handles_Unlock(&db->shared->mutex);
    }
 
    DLT_LOG(persComLldbDLTCtx, DLT_LOG_DEBUG,
@@ -1574,30 +1612,68 @@ static sint_t GetDataFromKissRCT(sint_t dbHandler, pconststr_t key, PersistenceC
    return bytesRead;
 }
 
-static bool_t lldb_handles_Lock(void)
+static bool_t lldb_handles_InitLock(pthread_mutex_t *mutex)
 {
    bool_t bEverythingOK = true;
-   sint_t siErr = pthread_mutex_lock(&g_mutexLldb);
+   pthread_mutexattr_t mattr;
+
+   pthread_mutexattr_init(&mattr);
+   pthread_mutexattr_setrobust(&mattr, PTHREAD_MUTEX_ROBUST);
+   pthread_mutexattr_setpshared(&mattr, PTHREAD_PROCESS_SHARED);
+   sint_t siErr = pthread_mutex_init(mutex, &mattr);
    if (0 != siErr)
    {
       bEverythingOK = false;
       DLT_LOG(persComLldbDLTCtx, DLT_LOG_ERROR,
-              DLT_STRING(LT_HDR); DLT_STRING(__FUNCTION__); DLT_STRING(":"); DLT_STRING("pthread_mutex_lock failed with error=<"); DLT_INT(siErr); DLT_STRING(">"));
+              DLT_STRING(LT_HDR); DLT_STRING(__FUNCTION__); DLT_STRING(":"); DLT_STRING("pthread_mutex_init failed with error=<"); DLT_INT(siErr); DLT_STRING(">"));
    }
+
+   pthread_mutexattr_destroy(&mattr);
+
    return bEverythingOK;
 }
 
-static bool_t lldb_handles_Unlock(void)
+static bool_t lldb_handles_Lock(pthread_mutex_t *mutex)
 {
    bool_t bEverythingOK = true;
 
-   sint_t siErr = pthread_mutex_unlock(&g_mutexLldb);
+   sint_t siErr = pthread_mutex_lock(mutex);
+
+   if (0 != siErr)
+   {
+      if (EOWNERDEAD == siErr)
+      {
+         sint_t siErr = pthread_mutex_consistent(mutex);
+         if (0 != siErr)
+         {
+            bEverythingOK = false;
+            DLT_LOG(persComLldbDLTCtx, DLT_LOG_ERROR,
+                    DLT_STRING(LT_HDR); DLT_STRING(__FUNCTION__); DLT_STRING(":"); DLT_STRING("pthread_mutex_consistent failed with error=<"); DLT_INT(siErr); DLT_STRING(">"));
+         }
+      }
+      else
+      {
+         bEverythingOK = false;
+         DLT_LOG(persComLldbDLTCtx, DLT_LOG_ERROR,
+                 DLT_STRING(LT_HDR); DLT_STRING(__FUNCTION__); DLT_STRING(":"); DLT_STRING("pthread_mutex_lock failed with error=<"); DLT_INT(siErr); DLT_STRING(">"));
+      }
+   }
+
+   return bEverythingOK;
+}
+
+static bool_t lldb_handles_Unlock(pthread_mutex_t *mutex)
+{
+   bool_t bEverythingOK = true;
+
+   sint_t siErr = pthread_mutex_unlock(mutex);
    if (0 != siErr)
    {
       bEverythingOK = false;
       DLT_LOG(persComLldbDLTCtx, DLT_LOG_ERROR,
               DLT_STRING(LT_HDR); DLT_STRING(__FUNCTION__); DLT_STRING(":"); DLT_STRING("pthread_mutex_unlock failed with error=<"); DLT_INT(siErr); DLT_STRING(">"));
    }
+
    return bEverythingOK;
 }
 
@@ -2148,8 +2224,10 @@ sint_t getListandSize(KISSDB* db, pstr_t buffer, sint_t size, bool_t bOnlySizeNe
 {
    char* memory = NULL;
    char* ptr;
+   char* ptr2;
    char** tmplist = NULL;
-   int keyCountFile = 0, keyCountCache = 0, result = 0, x = 0, idx = 0, max = 0, used = 0, objCount = 0;
+   char** tmp_deleted_list = NULL;
+   int keyCountFile = 0, keyCountCache = 0, deletedKeysInCacheCount = 0, result = 0, x = 0, idx = 0, max = 0, used = 0, objCount = 0;
    KISSDB_Iterator dbi;
    pers_lldb_cache_flag_e eFlag;
    qhasharr_t* tbl;
@@ -2176,6 +2254,7 @@ sint_t getListandSize(KISSDB* db, pstr_t buffer, sint_t size, bool_t bOnlySizeNe
          if (objCount > 0)
          {
             tmplist = malloc(sizeof(char*) * objCount);
+            tmp_deleted_list = malloc(sizeof(char*) * objCount);
             if (tmplist != NULL)
             {
                while (db->tbl[0]->getnext(db->tbl[0], &obj, &idx) == true)
@@ -2190,6 +2269,12 @@ sint_t getListandSize(KISSDB* db, pstr_t buffer, sint_t size, bool_t bOnlySizeNe
                      ptr = tmplist[keyCountCache];
                      ptr[keyLen] = '\0';
                      keyCountCache++;
+                  } else { //get all keys marked as deleted in cache
+                    tmp_deleted_list[deletedKeysInCacheCount] = (char*) malloc(keyLen + 1);
+                    (void) strncpy(tmp_deleted_list[deletedKeysInCacheCount], obj.name, keyLen);
+                    ptr2 = tmp_deleted_list[deletedKeysInCacheCount];
+                    ptr2[keyLen] = '\0';
+                    deletedKeysInCacheCount++;
                   }
                }
             }
@@ -2209,7 +2294,19 @@ sint_t getListandSize(KISSDB* db, pstr_t buffer, sint_t size, bool_t bOnlySizeNe
    {
       if (iter_ret_val == KISSDB_ITERATOR_NEXT_ITEM_FOUND)
       {      
+          bool found_deleted = false;
+          for (x = 0; x < deletedKeysInCacheCount; x++)
+          {
+             if (strncmp(kbuf, tmp_deleted_list[x], strnlen(kbuf, sizeof(kbuf))) == 0)
+             {
+               found_deleted = true;
+             }
+          }
+          // Do not count key in file which is already marked as deleted in cache and not yet updated to file.
+          if(!found_deleted )
+          {
             keyCountFile++;
+          }
       }
    }
 
@@ -2229,15 +2326,19 @@ sint_t getListandSize(KISSDB* db, pstr_t buffer, sint_t size, bool_t bOnlySizeNe
          //put keys in cache to a hashtable
          for (x = 0; x < keyCountCache; x++)
          {
-            if (tbl->put(tbl, tmplist[x], "0", 1) == true)
-            {
-               if (tmplist[x] != NULL)
-               {
-                  free(tmplist[x]);
-               }
-            }
+           if( tmplist != NULL)
+           {
+             if (tbl->put(tbl, tmplist[x], "0", 1) == true)
+             {
+                if (tmplist[x] != NULL)
+                {
+                   free(tmplist[x]);
+                }
+             }
+           }
          }
-         free(tmplist);
+         if( tmplist != NULL)
+           free(tmplist);
 
          //put keys in database file to hashtable (existing key gets overwritten -> no duplicate keys)
          KISSDB_Iterator_init(db, &dbi);
@@ -2246,14 +2347,36 @@ sint_t getListandSize(KISSDB* db, pstr_t buffer, sint_t size, bool_t bOnlySizeNe
          {
             if (iter_ret_val == KISSDB_ITERATOR_NEXT_ITEM_FOUND)
             {
-                size_t keyLen = strnlen(kbuf, sizeof(kbuf));
-                if (keyLen > 0)
-                {
-                   tbl->put(tbl, kbuf, "0", 1);
-                }
+               size_t keyLen = strnlen(kbuf, sizeof(kbuf));
+               if (keyLen > 0)
+               {
+                   //only add keys from file to temporary hashtable if they are not already marked as deleted in cache
+                  bool found_deleted = false;
+                  for (x = 0; x < deletedKeysInCacheCount; x++)
+                  {
+                    if (strncmp(kbuf, tmp_deleted_list[x], keyLen) == 0)
+                    {
+                      found_deleted = true;
+                    }
+                  }
+                  if(!found_deleted )
+                  {
+                    tbl->put(tbl, kbuf, "0", 1);
+                  }
+               }
             }
          }
-
+         // free temporary list which holds the deleted keys that are not yet updated with file
+         if( tmp_deleted_list != NULL) {
+            for (x = 0; x < deletedKeysInCacheCount; x++)
+            {
+               if (tmp_deleted_list[x] != NULL)
+               {
+                 free(tmp_deleted_list[x]);
+               }
+            }
+            free(tmp_deleted_list);
+         }
          //count needed size for buffer / copy keys to buffer
          idx = 0;
          while (tbl->getnext(tbl, &obj, &idx) == true)
@@ -2277,6 +2400,17 @@ sint_t getListandSize(KISSDB* db, pstr_t buffer, sint_t size, bool_t bOnlySizeNe
       }
       else
       {
+         // free temporary list which holds the deleted keys that are not yet updated with file
+         if( tmp_deleted_list != NULL) {
+            for (x = 0; x < deletedKeysInCacheCount; x++)
+            {
+               if (tmp_deleted_list[x] != NULL)
+               {
+                 free(tmp_deleted_list[x]);
+               }
+            }
+            free(tmp_deleted_list);
+         }
          return PERS_COM_ERR_MALLOC;
       }
    }
