@@ -2228,6 +2228,7 @@ int writeDualDataBlock(KISSDB* db, int64_t offset, int htNumber, const void* key
 
    block = (DataBlock_s*) (db->mappedDb + offset);
    block->delimStart = DATA_BLOCK_A_START_DELIMITER;
+   memset(block->key, 0, db->keySize);
    memcpy(block->key,key, klen);
    block->valSize = valueSize;
    memcpy(block->value,value, block->valSize);
@@ -2241,6 +2242,7 @@ int writeDualDataBlock(KISSDB* db, int64_t offset, int htNumber, const void* key
    backupBlock = (DataBlock_s*) ((char*) block + sizeof(DataBlock_s));
    backupBlock->delimStart = DATA_BLOCK_B_START_DELIMITER;
    backupBlock->crc = crc;
+   memset(backupBlock->key, 0, db->keySize);
    memcpy(backupBlock->key,key, klen);
    backupBlock->valSize = valueSize;
    memcpy(backupBlock->value,value, backupBlock->valSize);
