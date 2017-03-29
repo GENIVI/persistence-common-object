@@ -1004,6 +1004,8 @@ static sint_t DeleteDataFromKissDB(sint_t dbHandler, pconststr_t key)
                        DLT_STRING("Error Message: "); DLT_STRING(strerror(errno)));
             }
          }
+
+         fdatasync(pLldbHandler->kissDb.fd);
       }
       Kdb_unlock(&pLldbHandler->kissDb.shared->rwlock);
    }
@@ -1076,6 +1078,8 @@ static sint_t DeleteDataFromKissRCT(sint_t dbHandler, pconststr_t key)
                        DLT_STRING("Error Message: "); DLT_STRING(strerror(errno)));
             }
          }
+
+         fdatasync(pLldbHandler->kissDb.fd);
       }
       Kdb_unlock(&pLldbHandler->kissDb.shared->rwlock);
    }
@@ -1295,6 +1299,8 @@ static sint_t SetDataInKissLocalDB(sint_t dbHandler, pconststr_t key, pconststr_
                DLT_LOG(persComLldbDLTCtx, DLT_LOG_ERROR,
                      DLT_STRING(__FUNCTION__); DLT_STRING(":"); DLT_STRING("KISSDB_put: key=<"); DLT_STRING(metaKey); DLT_STRING(">, "); DLT_STRING("WriteThrough to file failed with retval=<"); DLT_INT(bytesWritten); DLT_STRING(">"));
             }
+
+            fdatasync(pLldbHandler->kissDb.fd);
          }
       }
       Kdb_unlock(&pLldbHandler->kissDb.shared->rwlock);
@@ -1380,6 +1386,8 @@ static sint_t SetDataInKissRCT(sint_t dbHandler, pconststr_t key, PersistenceCon
                DLT_LOG(persComLldbDLTCtx, DLT_LOG_ERROR,
                      DLT_STRING(__FUNCTION__); DLT_STRING(":"); DLT_STRING("KISSDB_put: RCT key=<"); DLT_STRING(metaKey); DLT_STRING(">, "); DLT_STRING("WriteThrough to file failed with retval=<"); DLT_INT(bytesWritten); DLT_STRING(">"));
             }
+
+            fdatasync(pLldbHandler->kissDb.fd);
          }
       }
       Kdb_unlock(&pLldbHandler->kissDb.shared->rwlock);
