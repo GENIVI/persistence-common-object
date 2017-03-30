@@ -3014,6 +3014,150 @@ START_TEST(test_WriteThrough)
 END_TEST
 
 
+START_TEST(test_AddKey_DeleteKey_AddShorterKeyName)
+{
+   char* write2 =
+         "abcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstu"
+         "abcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstu"
+         "abcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstu"
+         "abcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstu"
+         "abcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstu"
+         "abcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstu"
+         "abcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstu"
+         "abcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstu"
+         "abcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstu"
+         "abcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstu"
+         "1234565794587954687654";
+
+   const char* longKeyTemplate = "AlongKey_%d_whi.ch_is_very_long";
+   const char* mixedKeyFragment = "is_very_long";
+   char keyBuffer[256] = {0};
+   int handle = -1;
+   int ret = 0;
+   int i = 0, listSize = 0;
+
+   //Cleaning up testdata folder
+   remove("/tmp/AddKey_DeleteKey_AddShorterKeyName.db");
+
+
+   handle = persComDbOpen("/tmp/AddKey_DeleteKey_AddShorterKeyName.db", 0x1); //create test.db if not present
+   fail_unless(handle >= 0, "Failed to create non existent lDB: retval: [%d]", handle);
+
+   //
+   // add keys with long key-names
+   //
+   for(i=1; i<=300; i++)
+   {
+      memset(keyBuffer, 0, 256);
+      snprintf(keyBuffer, 128, longKeyTemplate, i, i);
+
+      ret = persComDbWriteKey(handle, keyBuffer, (char*)write2, strlen(write2));
+      fail_unless(ret == strlen(write2) , "Wrong write size while inserting in cache");
+   }
+   ret = persComDbClose(handle);
+   handle = -1;
+
+   //
+   // delete all keys with long key-names.
+   //
+   handle = persComDbOpen("/tmp/AddKey_DeleteKey_AddShorterKeyName.db", 0x2); // write through
+   fail_unless(handle >= 0, "Failed to create non existent lDB: retval: [%d]", handle);
+
+   for(i=1; i<=300; i++)
+   {
+      memset(keyBuffer, 0, 256);
+      snprintf(keyBuffer, 128, longKeyTemplate, i, i);
+
+      ret = persComDbDeleteKey(handle, keyBuffer);
+      fail_unless(ret >= 0, "Failed to delete key: %d - error: %d", i, ret);
+   }
+   ret = persComDbClose(handle);
+   handle = -1;
+
+
+   //
+   // now add new keys with shorter key-names; memory space from deleted keys in the db should be reused by newly added keys.
+   //
+   handle = persComDbOpen("/tmp/AddKey_DeleteKey_AddShorterKeyName.db", 0x2); // write through
+   fail_unless(handle >= 0, "Failed to create non existent lDB: retval: [%d]", handle);
+
+
+   ret = persComDbWriteKey(handle, "ASHORTKEY_01", (char*)write2, strlen(write2));
+   fail_unless(ret == strlen(write2) , "Wrong write size while inserting in cache");
+
+   ret = persComDbWriteKey(handle, "ASHORTKEY_02", (char*)write2, strlen(write2));
+   fail_unless(ret == strlen(write2) , "Wrong write size while inserting in cache");
+
+   ret = persComDbWriteKey(handle, "ALONGKEY_10_SHORT", (char*)write2, strlen(write2));
+   fail_unless(ret == strlen(write2) , "Wrong write size while inserting in cache");
+
+   ret = persComDbWriteKey(handle, "ALONGKEY_20_SHORT", (char*)write2, strlen(write2));
+   fail_unless(ret == strlen(write2) , "Wrong write size while inserting in cache");
+
+   ret = persComDbClose(handle);
+   handle = -1;
+
+   //
+   // now check if key-names were correctly written
+   //
+   handle = persComDbOpen("/tmp/AddKey_DeleteKey_AddShorterKeyName.db", 0x2); // write through
+
+   listSize = persComDbGetSizeKeysList(handle);
+
+   if(listSize > 0)
+   {
+      // now extract from the given list the single keys and search for mixed up key-names
+      char* resourceList = (char*)malloc((size_t)listSize+4);
+      memset(resourceList, 0, (size_t)listSize+4-1);
+
+      if(resourceList != NULL)
+      {
+         int i = 0, idx = 0, numResources = 0;
+         int resourceStartIdx[256] = {0};
+         char buffer[2048] = {0};
+
+         memset(resourceStartIdx, 0, 256-1);
+         ret = persComDbGetKeysList(handle, resourceList, listSize);
+
+         if(ret != 0)
+         {
+            resourceStartIdx[idx] = 0; // initial start
+
+            for(i=1; i<listSize; i++ )
+            {
+              if(resourceList[i]  == '\0')
+              {
+                 numResources++;
+                 resourceStartIdx[idx++] = i+1;
+              }
+            }
+            for(i=0; i<=numResources; i++)
+            {
+               // now search for mixed keys; if we have found the mixedKeryFragment, key-name is corrupt and test must fail
+               char*  mixedFound = strstr(&resourceList[resourceStartIdx[i]], mixedKeyFragment);
+               if(NULL != mixedFound)
+               {
+                  printf("Key[%d]: %s\n", i, &resourceList[resourceStartIdx[i]]);
+                  printf("     Problem: %s\n", &resourceList[resourceStartIdx[i]]);
+               }
+
+               fail_unless(NULL == mixedFound, "Invalid key name detected [%s]", &resourceList[resourceStartIdx[i]]);
+            }
+         }
+
+         free(resourceList);
+      }
+   }
+
+   ret = persComDbClose(handle);
+   handle = -1;
+
+}
+END_TEST
+
+
+
+
 
 static Suite* persistenceCommonLib_suite()
 {
@@ -3092,6 +3236,9 @@ static Suite* persistenceCommonLib_suite()
    tcase_add_test(tc_WriteThrough, test_WriteThrough);
    tcase_set_timeout(tc_WriteThrough, 20);
 
+   TCase* tc_AddKey_DeleteKey_AddShorterKeyName = tcase_create("AddKey_DeleteKey_AddShorterKeyName");
+   tcase_add_test(tc_AddKey_DeleteKey_AddShorterKeyName, test_AddKey_DeleteKey_AddShorterKeyName);
+   tcase_set_timeout(tc_AddKey_DeleteKey_AddShorterKeyName, 60);
 
 
    suite_add_tcase(s, tc_persOpenLocalDB);
@@ -3161,8 +3308,15 @@ static Suite* persistenceCommonLib_suite()
    suite_add_tcase(s, tc_WriteThrough);
    tcase_add_checked_fixture(tc_WriteThrough, data_setup, data_teardown);
 
+   suite_add_tcase(s, tc_AddKey_DeleteKey_AddShorterKeyName);
+
    return s;
 }
+
+
+
+
+
 
 
 int main(int argc, char* argv[])
@@ -3170,7 +3324,6 @@ int main(int argc, char* argv[])
    int nr_failed = 0, nr_run = 0, i = 0;
    TestResult** tResult;
 
-#if 1
    Suite* s = persistenceCommonLib_suite();
    SRunner* sr = srunner_create(s);
    srunner_set_xml(sr, "/tmp/persistenceCommonObjectTest.xml");
@@ -3187,7 +3340,6 @@ int main(int argc, char* argv[])
    }
 
    srunner_free(sr);
-#endif
 
    dlt_free();
    return (0 == nr_failed) ? EXIT_SUCCESS : EXIT_FAILURE;
