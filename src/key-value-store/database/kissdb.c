@@ -623,6 +623,7 @@ int KISSDB_close(KISSDB* db)
       //unmap shared hashtables
       munmap(db->hashTables, db->htMappedSize);
       db->hashTables = NULL;
+
       //close shared memory for hashtables
       if( kdbShmemClose(db->htFd, db->htName) == Kdb_false)
       {
@@ -662,8 +663,15 @@ int KISSDB_close(KISSDB* db)
         free(db->cacheName); //free memory for name  obtained by kdbGetShmName() function
         db->cacheName = NULL;
       }
+
       if( db->fd)
       {
+         // sync data to non volatile memory device
+#if USE_FSYNC
+         fsync(db->fd);
+#else
+         fdatasync(db->fd);
+#endif
          close(db->fd);
          db->fd = 0;
       }

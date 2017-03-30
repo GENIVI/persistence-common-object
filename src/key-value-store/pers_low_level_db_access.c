@@ -155,6 +155,29 @@ static int openCache(KISSDB* db);
 //static int addCache(KISSDB* db);
 static int closeCache(KISSDB* db);
 
+
+
+__attribute__((constructor))
+static void pco_library_init()
+{
+   pid_t pid = getpid();
+   str_t dltContextID[16]; /* should be at most 4 characters string, but colissions occure */
+
+   /* init DLT */
+   (void) snprintf(dltContextID, sizeof(dltContextID), "Pers_%04d", pid);
+   DLT_REGISTER_CONTEXT(persComLldbDLTCtx, dltContextID, "PersCommonLLDB");
+   //DLT_SET_APPLICATION_LL_TS_LIMIT(DLT_LOG_DEBUG, DLT_TRACE_STATUS_OFF);
+   DLT_LOG(persComLldbDLTCtx, DLT_LOG_DEBUG, DLT_STRING(LT_HDR); DLT_STRING(__FUNCTION__); DLT_STRING(":"); DLT_STRING("register context PersCommonLLDB ContextID="); DLT_STRING(dltContextID));
+}
+
+__attribute__((destructor))
+static void pco_library_destroy()
+{
+   DLT_UNREGISTER_CONTEXT(persComLldbDLTCtx);
+}
+
+
+
 /**
  * \open or create a key-value database
  * \note : DB type is identified from dbPathname (based on extension)
@@ -177,24 +200,8 @@ sint_t pers_lldb_open(str_t const* dbPathname, pers_lldb_purpose_e ePurpose, boo
    int writeMode = KISSDB_WRITE_MODE_WC;  //default is write cached
    lldb_handler_s* pLldbHandler = NIL;
    sint_t returnValue = PERS_COM_FAILURE;
-   static bool_t bFirstCall = true;
 
    path = dbPathname;
-
-   if (bFirstCall)
-   {
-      pid_t pid = getpid();
-      str_t dltContextID[16]; /* should be at most 4 characters string, but colissions occure */
-
-      /* set an error handler - the default one will cause the termination of the calling process */
-      bFirstCall = false;
-      /* init DLT */
-      (void) snprintf(dltContextID, sizeof(dltContextID), "Pers_%04d", pid);
-      DLT_REGISTER_CONTEXT(persComLldbDLTCtx, dltContextID, "PersCommonLLDB");
-      //DLT_SET_APPLICATION_LL_TS_LIMIT(DLT_LOG_DEBUG, DLT_TRACE_STATUS_OFF);
-      DLT_LOG(persComLldbDLTCtx, DLT_LOG_DEBUG,
-              DLT_STRING(LT_HDR); DLT_STRING(__FUNCTION__); DLT_STRING(":"); DLT_STRING("register context PersCommonLLDB ContextID="); DLT_STRING(dltContextID));
-   }
 
    DLT_LOG(persComLldbDLTCtx, DLT_LOG_DEBUG,
            DLT_STRING(LT_HDR); DLT_STRING(__FUNCTION__); DLT_STRING("Begin opening:"); DLT_STRING("<"); DLT_STRING(dbPathname); DLT_STRING(">, ");
@@ -1005,7 +1012,12 @@ static sint_t DeleteDataFromKissDB(sint_t dbHandler, pconststr_t key)
             }
          }
 
+
+#if USE_FSYNC
+         fsync(pLldbHandler->kissDb.fd);
+#else
          fdatasync(pLldbHandler->kissDb.fd);
+#endif
       }
       Kdb_unlock(&pLldbHandler->kissDb.shared->rwlock);
    }
@@ -1079,7 +1091,11 @@ static sint_t DeleteDataFromKissRCT(sint_t dbHandler, pconststr_t key)
             }
          }
 
+#if USE_FSYNC
+         fsync(pLldbHandler->kissDb.fd);
+#else
          fdatasync(pLldbHandler->kissDb.fd);
+#endif
       }
       Kdb_unlock(&pLldbHandler->kissDb.shared->rwlock);
    }
@@ -1300,7 +1316,11 @@ static sint_t SetDataInKissLocalDB(sint_t dbHandler, pconststr_t key, pconststr_
                      DLT_STRING(__FUNCTION__); DLT_STRING(":"); DLT_STRING("KISSDB_put: key=<"); DLT_STRING(metaKey); DLT_STRING(">, "); DLT_STRING("WriteThrough to file failed with retval=<"); DLT_INT(bytesWritten); DLT_STRING(">"));
             }
 
+#if USE_FSYNC
+            fsync(pLldbHandler->kissDb.fd);
+#else
             fdatasync(pLldbHandler->kissDb.fd);
+#endif
          }
       }
       Kdb_unlock(&pLldbHandler->kissDb.shared->rwlock);
@@ -1387,7 +1407,11 @@ static sint_t SetDataInKissRCT(sint_t dbHandler, pconststr_t key, PersistenceCon
                      DLT_STRING(__FUNCTION__); DLT_STRING(":"); DLT_STRING("KISSDB_put: RCT key=<"); DLT_STRING(metaKey); DLT_STRING(">, "); DLT_STRING("WriteThrough to file failed with retval=<"); DLT_INT(bytesWritten); DLT_STRING(">"));
             }
 
+#if USE_FSYNC
+            fsync(pLldbHandler->kissDb.fd);
+#else
             fdatasync(pLldbHandler->kissDb.fd);
+#endif
          }
       }
       Kdb_unlock(&pLldbHandler->kissDb.shared->rwlock);

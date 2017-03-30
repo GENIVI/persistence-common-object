@@ -191,6 +191,26 @@ esac],
 AM_CONDITIONAL(DEBUG, test x"$debug" = x"true")
 
 
+dnl *************************************
+dnl *** enable to use fsync instead of fdatasync for write through
+dnl *************************************
+AC_ARG_ENABLE([fsync],
+            [AS_HELP_STRING([--enable-fsync],[Enable fsync instead of fdatasync])],
+            [use_fsync=$enableval],
+            [use_fsync="no"])
+
+AM_CONDITIONAL([USE_FSYNC], [test x"$use_fsync" = "no"])
+
+if test "$use_fsync" != "yes" -a "$use_fsync" != "no"; then   
+   AC_MSG_ERROR([Invalid fsync check check: $use_fsync. Only "yes" or "no" is valid])
+else   
+   AC_MSG_NOTICE([Use fsync: $use_fsync])
+
+   if test "$use_fsync" = "yes"; then
+      AC_DEFINE_UNQUOTED([USE_FSYNC], [1], [fsync is anabled])   
+   fi
+fi
+
 
 dnl *************************************
 dnl *** Define extra paths            ***
