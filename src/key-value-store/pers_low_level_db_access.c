@@ -67,6 +67,8 @@ DLT_DECLARE_CONTEXT   (persComLldbDLTCtx)
 
 #define PERS_STATUS_KEY_NOT_IN_CACHE             -10        /* /!< key not in cache */
 
+#define SEM_TIMEDWAIT_TIMEOUT                      5        // wait for seconds until sem_timedwait fails
+
 typedef struct
 {
    char m_data[PERS_DB_MAX_SIZE_KEY_DATA];
@@ -120,6 +122,8 @@ static const char ListItemsSeparator = '\0';
 /* shared by all the threads within a process */
 static lldb_handlers_s g_sHandlers; // initialize to 0 and NULL
 //static lldb_handlers_s g_sHandlers = { { { 0 } } };
+
+static struct timespec gSemWaitTimeout;
 
 /* ---------------------- local macros  --------------------------------- */
 
@@ -284,10 +288,15 @@ sint_t pers_lldb_open(str_t const* dbPathname, pers_lldb_purpose_e ePurpose, boo
             }
          }
       }
-      if (-1 == sem_wait(pLldbHandler->kissDb.kdbSem))
+
+      clock_gettime(CLOCK_REALTIME, &gSemWaitTimeout);
+      gSemWaitTimeout.tv_sec += SEM_TIMEDWAIT_TIMEOUT;
+      if(-1 == sem_timedwait(pLldbHandler->kissDb.kdbSem, &gSemWaitTimeout))
       {
          DLT_LOG(persComLldbDLTCtx, DLT_LOG_ERROR, DLT_STRING(__FUNCTION__); DLT_STRING(": sem_wait() in open failed: "),
                  DLT_STRING(strerror(errno)));
+
+         return PERS_COM_ERR_SEM_WAIT_TIMEOUT;
       }
       kdbState = KISSDB_open(&pLldbHandler->kissDb, path, openMode, writeMode, HASHTABLE_SLOT_COUNT, keysize, datasize);
       if (kdbState != 0)
@@ -433,10 +442,14 @@ sint_t pers_lldb_close(sint_t handlerDB)
          bLocked = true;
       }
 
-      if (-1 == sem_wait(db->kdbSem))
+      clock_gettime(CLOCK_REALTIME, &gSemWaitTimeout);
+      gSemWaitTimeout.tv_sec += SEM_TIMEDWAIT_TIMEOUT;
+      if (-1 == sem_timedwait(db->kdbSem, &gSemWaitTimeout))   // wait for 5 seconds
       {
          DLT_LOG(persComLldbDLTCtx, DLT_LOG_ERROR, DLT_STRING(__FUNCTION__); DLT_STRING(": sem_wait() in close failed: "),
                  DLT_STRING(strerror(errno)));
+
+         return PERS_COM_ERR_SEM_WAIT_TIMEOUT;
       }
 
       DLT_LOG(persComLldbDLTCtx, DLT_LOG_DEBUG,

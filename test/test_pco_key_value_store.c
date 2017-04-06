@@ -29,6 +29,7 @@
 #include <dlt/dlt_common.h>
 #include <../inc/protected/persComRct.h>
 #include <../inc/protected/persComDbAccess.h>
+#include <../inc/protected/persComErrors.h>
 //#include <../test/pers_com_test_base.h>
 //#include <../test/pers_com_check.h>
 #include <check.h>
@@ -3315,7 +3316,86 @@ static Suite* persistenceCommonLib_suite()
 
 
 
+void* kvdbOpenThread(void* userData)
+{
+   int ret = -1;
+   int handle = -1;
+   const char* threadID = (const char*) userData;
 
+   sleep(1);
+   printf("- Started thread - read - %s\n", threadID);
+
+   printf("- do => persComDbOpen\n");
+   handle = persComDbOpen("/tmp/semlockTimeoutTest.db", 0x1); //create test.db if not present (cached)
+   printf("- do <= persComDbOpen\n");
+
+   if(handle >= 0 )
+   {
+      ret = persComDbClose(handle);
+   }
+   else if(handle == PERS_COM_ERR_SEM_WAIT_TIMEOUT)
+   {
+      printf("persComDbClose - sem_wait timedout => test PASSED\n");
+   }
+   else
+   {
+      printf("persComDbClose - common error: %d\n", handle);
+   }
+
+   printf("- End - thread: %d \n", handle);
+   pthread_exit(0);
+}
+
+
+void* semBlockingThread(void* userData)
+{
+   int sleepSec = 10;
+   sem_t* semHandle;
+   const char* threadID = (const char*) userData;
+
+   printf("# Started thread - read - %s - do sem_open\n", threadID);
+
+   semHandle = sem_open("_tmp_semlockTimeoutTest_db-sem", O_CREAT | O_EXCL, 0644, 1);
+
+   printf("# Do sem_wait\n");
+   sem_wait(semHandle);
+
+   printf("# Now sleep %d seconds, and block persComDbOpen call from other thread\n", sleepSec);
+   sleep(sleepSec);
+
+   printf("# Do sem_post\n");
+   sem_post(semHandle);
+
+   pthread_exit(0);
+}
+
+
+
+void doSemLockTimeoutTest()
+{
+   pthread_t threadInfoFirst, threadInfoSecond;
+
+   if(pthread_create(&threadInfoFirst, NULL, semBlockingThread, "Thread Blocking") != -1)
+   {
+      (void)pthread_setname_np(threadInfoFirst, "Blocking");
+   }
+
+   if(pthread_create(&threadInfoSecond, NULL, kvdbOpenThread, "Thread open") != -1)
+   {
+      (void)pthread_setname_np(threadInfoSecond, "Open");
+   }
+
+
+   if(pthread_join(threadInfoFirst, NULL) != 0)  // wait
+      printf("pthread_join - FAILED First\n");
+
+   if(pthread_join(threadInfoSecond, NULL) != 0)  // wait
+      printf("pthread_join - FAILED Second\n");
+
+
+   printf("End of lock test\n");
+   sem_unlink("_tmp_semlockTimeoutTest_db-sem");
+}
 
 
 
@@ -3326,20 +3406,28 @@ int main(int argc, char* argv[])
 
    Suite* s = persistenceCommonLib_suite();
    SRunner* sr = srunner_create(s);
-   srunner_set_xml(sr, "/tmp/persistenceCommonObjectTest.xml");
-   srunner_set_log(sr, "/tmp/persistenceCommonObjectTest.log");
-   srunner_run_all(sr, /*CK_NORMAL*/CK_VERBOSE);
 
-   nr_failed = srunner_ntests_failed(sr);
-   nr_run = srunner_ntests_run(sr);
-
-   tResult = srunner_results(sr);
-   for (i = 0; i < nr_run; i++)
+   if(argc == 1)
    {
-      (void) tr_rtype(tResult[i]);  // get status of each test
-   }
+      srunner_set_xml(sr, "/tmp/persistenceCommonObjectTest.xml");
+      srunner_set_log(sr, "/tmp/persistenceCommonObjectTest.log");
+      srunner_run_all(sr, /*CK_NORMAL*/CK_VERBOSE);
 
-   srunner_free(sr);
+      nr_failed = srunner_ntests_failed(sr);
+      nr_run = srunner_ntests_run(sr);
+
+      tResult = srunner_results(sr);
+      for (i = 0; i < nr_run; i++)
+      {
+         (void) tr_rtype(tResult[i]);  // get status of each test
+      }
+
+      srunner_free(sr);
+   }
+   else
+   {
+      doSemLockTimeoutTest();
+   }
 
    dlt_free();
    return (0 == nr_failed) ? EXIT_SUCCESS : EXIT_FAILURE;
