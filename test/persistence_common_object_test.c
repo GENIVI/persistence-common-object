@@ -2525,8 +2525,116 @@ END_TEST
 
 
 
+START_TEST(test_CrashTest)
+{
+   X_TEST_REPORT_TEST_NAME("persistence_common_object_test");
+   X_TEST_REPORT_COMP_NAME("libpers_common");
+   X_TEST_REPORT_REFERENCE("NONE");
+   X_TEST_REPORT_DESCRIPTION("Test to see if API could be used to cause a segmentation fault");
+   X_TEST_REPORT_TYPE(GOOD);
+
+   int rval = 0;
+   int handle = 0;
+   int outBufferSize = 10;
+   const char* path = NULL;
+   const char* nullKey  = NULL;
+   char* nullData = NULL;
+   int dataSize = 1000;
+   char* outbuffer;
+   char* validData = "This is some test data written into the database";
 
 
+
+   outbuffer = malloc(outBufferSize);
+   memset(outbuffer, 0 , outBufferSize);
+
+
+   //   //Cleaning up testdata folder
+   if (remove("/tmp/crash.db") == 0)
+      printf("File %s  deleted.\n", "/tmp/crash.db");
+   else
+      fprintf(stderr, "Warning:  Could not delete file [%s].\n", "/tmp/crash.db");
+
+
+   rval = persComDbOpen(path, 0);
+   x_fail_unless(rval < 0, "Success persComDbOpen: retval: [%d]", rval);
+   rval = persComDbOpen("/", 0);
+   x_fail_unless(rval < 0, "Success persComDbOpen: retval: [%d]", rval);
+   rval = persComDbOpen(" ", 0);
+   x_fail_unless(rval < 0, "Success persComDbOpen: retval: [%d]", rval);
+   rval = persComDbOpen(" ", -1);
+   x_fail_unless(rval < 0, "Success persComDbOpen: retval: [%d]", rval);
+   rval = persComDbOpen(" ", 100u);
+   x_fail_unless(rval < 0, "Success persComDbOpen: retval: [%d]", rval);
+
+
+   rval = persComDbClose(-1);
+   x_fail_unless(rval < 0, "Success persComDbClose: retval: [%d]", rval);
+
+
+   handle = persComDbOpen("/tmp/crash.db", 1);
+   x_fail_unless(handle >= 0, "Success persComDbOpen: retval: [%d]", handle);
+
+   rval = persComDbWriteKey(handle, nullKey, nullData, dataSize);
+   x_fail_unless(rval < 0, "Success persComDbWriteKey, but should not: retval: [%d]", rval);
+
+   rval = persComDbWriteKey(handle, nullKey, nullData, dataSize);
+   x_fail_unless(rval < 0, "Success persComDbWriteKey, but should not: retval: [%d]", rval);
+
+   rval = persComDbWriteKey(handle, "A_Test_Key", validData, strlen(validData));
+   x_fail_unless(rval >= 0, "Success persComDbWriteKey: retval: [%d]", rval);
+
+   rval = persComDbWriteKey(handle, "A_Test_Key_02", validData, strlen(validData));
+   x_fail_unless(rval >= 0, "Success persComDbWriteKey: retval: [%d]", rval);
+
+   rval = persComDbWriteKey(handle, "A_Test_Key_01", validData, strlen(validData));
+   x_fail_unless(rval >= 0, "Success persComDbWriteKey: retval: [%d]", rval);
+
+   rval = persComDbWriteKey(handle, "A_Test_Key_03", validData, strlen(validData));
+   x_fail_unless(rval >= 0, "Success persComDbWriteKey: retval: [%d]", rval);
+
+   rval = persComDbWriteKey(handle, "A_Test_Key_05", validData, strlen(validData));
+   x_fail_unless(rval >= 0, "Success persComDbWriteKey: retval: [%d]", rval);
+
+
+   rval = persComDbReadKey(handle, "A_Test_Key", nullData, 100);
+   x_fail_unless(rval < 0, "Success persComDbReadKey, but should not: retval: [%d]", rval);
+
+   rval = persComDbReadKey(handle, "A_Test_Key", outbuffer, outBufferSize);
+   x_fail_unless(rval < 0, "Success persComDbReadKey, but should not: retval: [%d]", rval);
+
+
+   rval = persComDbGetKeySize(handle, nullKey) ;
+   x_fail_unless(rval < 0, "Success persComDbGetKeySize, but should not: retval: [%d]", rval);
+
+
+
+   rval =  persComDbDeleteKey(handle, nullKey);
+   x_fail_unless(rval < 0, "Success persComDbDeleteKey, but should not: retval: [%d]", rval);
+
+
+   rval = persComDbGetSizeKeysList(-1);
+   x_fail_unless(rval < 0, "Success persComDbGetSizeKeysList, but should not: retval: [%d]", rval);
+
+
+
+   rval = persComDbGetSizeKeysList(100);
+   x_fail_unless(rval < 0, "Success persComDbGetSizeKeysList, but should not: retval: [%d]", rval);
+
+
+   rval =  persComDbGetKeysList(handle, nullData, 10) ;
+   x_fail_unless(rval < 0, "Success persComDbGetKeysList, but should not: retval: [%d]", rval);
+
+#if 0
+   rval =  persComDbGetKeysList(handle, outbuffer, outBufferSize) ;
+   x_fail_unless(rval < 0, "Success persComDbGetKeysList, but should not: retval: [%d]", rval);
+#endif
+   rval = persComDbClose(handle);
+
+   free(outbuffer);
+
+}
+END_TEST
 
 static Suite * persistenceCommonLib_suite()
 {
@@ -2602,8 +2710,11 @@ static Suite * persistenceCommonLib_suite()
    tcase_add_test(tc_Backups, test_Backups);
    tcase_set_timeout(tc_Backups, 5);
 
+   TCase * tc_CrashTest = tcase_create("BadParameters");
+   tcase_add_test(tc_CrashTest, test_CrashTest);
+   tcase_set_timeout(tc_CrashTest, 5);
 
-
+#if 1
    suite_add_tcase(s, tc_persOpenLocalDB);
    suite_add_tcase(s, tc_persOpenRCT);
    suite_add_tcase(s, tc_persSetDataLocalDB);
@@ -2622,6 +2733,8 @@ static Suite * persistenceCommonLib_suite()
                //suite_add_tcase(s, tc_RemapHashtableHeader);
                //suite_add_tcase(s, tc_SupportedChars);
    suite_add_tcase(s, tc_BadParameters);
+#endif
+   suite_add_tcase(s, tc_CrashTest);
    //suite_add_tcase(s, tc_Backups);
 
    return s;

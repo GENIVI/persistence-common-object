@@ -53,7 +53,10 @@ extern "C" {
 #define _Q_HASHARR_KEYSIZE (128)    /*!< knob for maximum key size. */
 #define _Q_HASHARR_VALUESIZE (32)  /*!< knob for maximum data size in a slot. */
 
-#define PERS_CACHE_MAX_SLOTS 100000 /**< Max. number of slots in the cache */
+
+//#define PERS_CACHE_MAX_SLOTS 100000 /**< Max. number of slots in the cache */
+// moved the definition of PERS_CACHE_MAX_SLOTS to configure.ac, size can be adjusted via configure step now
+// use --with-cachemaxslots to set the size, default is now 100000
 #define PERS_CACHE_MEMSIZE (sizeof(qhasharr_data_t)+ (sizeof(qhasharr_slot_t) * (PERS_CACHE_MAX_SLOTS)))
 
 /* types */

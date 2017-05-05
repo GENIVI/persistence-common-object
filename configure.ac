@@ -90,6 +90,8 @@ PKG_CHECK_MODULES([GIO], [gio-2.0 >= 2.30.0])
 PKG_CHECK_MODULES([GIO_UNIX], [gio-unix-2.0 >= 2.30.0])
 PKG_CHECK_MODULES([GLIB], [glib-2.0 >= 2.30.0])
 PKG_CHECK_MODULES([DLT], [automotive-dlt >= 2.2.0])
+PKG_CHECK_MODULES([ZLIB], [zlib >= 1.2.5])		
+PKG_CHECK_MODULES([ARCHIVELIB], [libarchive >= 3.0.4])	
 
 dnl *************************************
 dnl ***      Database support         ***
@@ -210,6 +212,20 @@ else
       AC_DEFINE_UNQUOTED([USE_FSYNC], [1], [fsync is anabled])   
    fi
 fi
+
+
+
+######################################################################
+### max numberr of database slots, default is 100.000
+######################################################################
+AC_ARG_WITH([cachemaxslots],
+              [AS_HELP_STRING([--with-cachemaxslots=numberOfMaxSlots],[NUmber of max db slots])],
+              [with_cachemaxslots=$withval],[with_cachemaxslots=100000])
+
+AC_SUBST([cachemaxslots], [$with_cachemaxslots])
+AC_MSG_NOTICE([Cache Max slots is: $cachemaxslots])
+AC_DEFINE_UNQUOTED(PERS_CACHE_MAX_SLOTS, $cachemaxslots, "max db slots for cache")
+
 
 
 dnl *************************************

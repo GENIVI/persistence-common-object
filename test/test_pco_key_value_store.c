@@ -35,6 +35,11 @@
 #include <check.h>
 #include <sys/wait.h>
 
+
+#include <archive.h>
+#include <archive_entry.h>
+
+
 #define BUF_SIZE     64
 #define NUM_OF_FILES 3
 #define READ_SIZE    1024
@@ -3159,6 +3164,227 @@ END_TEST
 
 
 
+static int doCopyData(struct archive *ar, struct archive *aw)
+{
+    int  s32Result = ARCHIVE_OK;
+    int  s32Size   = 0;
+    char buffer[128];
+
+    while( ARCHIVE_OK == s32Result )
+    {
+        s32Size = archive_read_data(ar, buffer, 128);
+        if( 0 > s32Size )
+        {
+            printf("doCopyData - archive_read_data ERR\n");
+            s32Result = ARCHIVE_FAILED;
+        }
+        else
+        {
+            if( 0 < s32Size )
+            {
+                s32Size = archive_write_data(aw, buffer, 128);
+                if( 0 > s32Size )
+                {
+                    printf("doCopyData - archive_write_data ERR\n");
+                    s32Result = ARCHIVE_FAILED;
+                }
+            }
+            else
+            {
+                /* nothing to copy; */
+                break;
+            }
+        }
+    }
+
+    /* return result; */
+    return s32Result;
+
+}
+
+
+
+static int doUncompress(const char* extractFrom, const char* extractTo)
+{
+    struct archive          *psArchive  = NULL;
+    struct archive          *psExtract  = NULL;
+    struct archive_entry    *psEntry    = NULL;
+    int                  s32Result   = ARCHIVE_OK;
+    int                  s32Flags    = ARCHIVE_EXTRACT_TIME;
+
+    /* select which attributes to restore; */
+    s32Flags |= ARCHIVE_EXTRACT_PERM;
+    s32Flags |= ARCHIVE_EXTRACT_ACL;
+    s32Flags |= ARCHIVE_EXTRACT_FFLAGS;
+    s32Flags |= ARCHIVE_EXTRACT_OWNER;
+
+    if( (NULL == extractFrom) ||
+        (NULL == extractTo) )
+    {
+        s32Result = ARCHIVE_FAILED;
+        printf("doUncompress - invalid parameters\n");
+    }
+
+    if( ARCHIVE_OK == s32Result )
+    {
+        psArchive = archive_read_new();
+        if( NULL == psArchive )
+        {
+            s32Result = ARCHIVE_FAILED;
+            printf("doUncompress - archive_read_new ERR\n");
+        }
+    }
+
+    if( ARCHIVE_OK == s32Result )
+    {
+        archive_read_support_format_all(psArchive);
+        archive_read_support_compression_all(psArchive);
+        psExtract = archive_write_disk_new();
+        s32Result = ((NULL == psExtract) ? ARCHIVE_FAILED : s32Result);
+        archive_write_disk_set_options(psExtract, s32Flags);
+        archive_write_disk_set_standard_lookup(psExtract);
+    }
+
+    if( ARCHIVE_OK == s32Result )
+    {
+        s32Result = archive_read_open_filename(psArchive, extractFrom, 10240);
+        /* exit if s32Result != ARCHIVE_OK; */
+    }
+
+    while( ARCHIVE_OK == s32Result )
+    {
+        s32Result = archive_read_next_header(psArchive, &psEntry);
+        switch( s32Result )
+        {
+            case ARCHIVE_EOF:
+            {
+                /* nothing else to do; */
+                break;
+            }
+            case ARCHIVE_OK:
+            {
+                /* modify entry here to extract to the needed location; */
+                char pstrTemp[512];
+                memset(pstrTemp, 0, sizeof(pstrTemp));
+                snprintf(pstrTemp, sizeof(pstrTemp), "%s%s", extractTo, archive_entry_pathname(psEntry));
+                printf("doUncompress - archive_entry_pathname %s\n", pstrTemp);
+                archive_entry_copy_pathname(psEntry, pstrTemp);
+
+                s32Result = archive_write_header(psExtract, psEntry);
+                if( ARCHIVE_OK == s32Result )
+                {
+                    if( archive_entry_size(psEntry) > 0 )
+                    {
+                        s32Result = doCopyData(psArchive, psExtract);
+                        if( ARCHIVE_OK != s32Result )
+                        {
+                            printf("doUncompress - copy_data ERR %s\n", archive_error_string(psExtract));
+                        }
+                        /* if( ARCHIVE_WARN > s32Result ) exit; */
+                    }
+
+                    if( ARCHIVE_OK == s32Result )
+                    {
+                        s32Result = archive_write_finish_entry(psExtract);
+                        if( ARCHIVE_OK != s32Result )
+                        {
+                            printf("persadmin_uncompress - archive_write_finish_entry ERR %s\n", archive_error_string(psExtract));
+                        }
+                        /* if( ARCHIVE_WARN > s32Result ) exit; */
+                    }
+                }
+                else
+                {
+                    printf("doUncompress - archive_write_header ERR %s\n", archive_error_string(psExtract));
+                }
+
+                break;
+            }
+            default:
+            {
+                printf("doUncompress - archive_read_next_header ERR %d\n", s32Result);
+                break;
+            }
+        }
+    }
+
+    /* perform cleaning operations; */
+    if( NULL != psArchive )
+    {
+        archive_read_close(psArchive);
+        archive_read_free(psArchive);
+    }
+    if( NULL != psExtract )
+    {
+        archive_write_close(psExtract);
+        archive_write_free(psExtract);
+    }
+
+    /* overwrite result; */
+    s32Result = (s32Result == ARCHIVE_EOF) ? ARCHIVE_OK : s32Result;
+
+    /* return result; */
+    return s32Result;
+
+}
+
+
+START_TEST(test_Compare_RCT)
+{
+   int result = 0;
+
+   // extract test RCT databases
+   result = doUncompress("/usr/local/var/rct_compare.tar.gz", "/tmp/");
+   fail_unless(result == 0, "Failed to extract test data");
+
+
+
+   // Compare to identical RCT's
+   result = check_for_same_file_content("/tmp/rct_compare/resource-table-cfg.itz",
+                                        "/tmp/rct_compare/resource-table-cfg_new.itz");
+   fail_unless(result == 1, "Failed: Two identical RCT's are reported to be different");
+
+
+   //Compare completely differernt RCT's
+   result = check_for_same_file_content("/tmp/rct_compare/resource-table-cfg.itz",
+                                        "/tmp/rct_compare/resource-table-cfg_wrong.itz");
+   fail_unless(result == 0, "Failed: Two different RCT's are reported to identical");
+
+
+   // Compare almost identical RCT's ==> configuration of one key differs
+   result = check_for_same_file_content("/tmp/rct_compare/resource-table-cfg.itz",
+                                        "/tmp/rct_compare/resource-table-cfg_new_modified.itz");
+   fail_unless(result == 0, "Failed: Two different RCT's are reported to identical");
+
+
+   // Compare an empty RCT with an RCT with some content
+   result = check_for_same_file_content("/tmp/rct_compare/resource-table-cfg_empty.itz",
+                                        "/tmp/rct_compare/resource-table-cfg_new_modified.itz");
+   fail_unless(result == 0, "Failed: An empty RCT is identicyl to an non empty one");
+
+
+   // Compare two empty RCT's
+   result = check_for_same_file_content("/tmp/rct_compare/resource-table-cfg_empty.itz",
+                                                  "/tmp/rct_compare/resource-table-cfg_empty2.itz");
+   fail_unless(result == 1, "Failed: Two empty RCT's reported to be different");
+
+
+   // Compare RCT with invalid path
+   result = check_for_same_file_content("/tmppppp/rct_compare/resource-table-cfg_empty.itz",
+                                        "/tmp/rct_compare/resource-table-cfg_new_modified.itz");
+   fail_unless(result == 0, "Failed: A RCT with an invalid path reported to be identical to an existing one");
+
+
+   // Pass NULL string 1
+   result = check_for_same_file_content("/tmp/rct_compare/resource-table-cfg.itz", NULL);
+   fail_unless(result == 0, "Failed: Null pointer in RCT filename reported as identical");
+
+
+   // Pass NULL string 2
+   result = check_for_same_file_content(NULL, "/tmp/rct_compare/resource-table-cfg.itz");
+   fail_unless(result == 0, "Failed: Null pointer in RCT filename reported as identical");
+}
+END_TEST
 
 static Suite* persistenceCommonLib_suite()
 {
@@ -3241,7 +3467,10 @@ static Suite* persistenceCommonLib_suite()
    tcase_add_test(tc_AddKey_DeleteKey_AddShorterKeyName, test_AddKey_DeleteKey_AddShorterKeyName);
    tcase_set_timeout(tc_AddKey_DeleteKey_AddShorterKeyName, 60);
 
+   TCase* tc_Compare_RCT = tcase_create("Compare_RCT");
+   tcase_add_test(tc_Compare_RCT, test_Compare_RCT);
 
+#if 1
    suite_add_tcase(s, tc_persOpenLocalDB);
    tcase_add_checked_fixture(tc_persOpenLocalDB, data_setup, data_teardown);
 
@@ -3310,6 +3539,11 @@ static Suite* persistenceCommonLib_suite()
    tcase_add_checked_fixture(tc_WriteThrough, data_setup, data_teardown);
 
    suite_add_tcase(s, tc_AddKey_DeleteKey_AddShorterKeyName);
+
+   suite_add_tcase(s, tc_Compare_RCT);
+#else
+
+#endif
 
    return s;
 }
@@ -3433,3 +3667,143 @@ int main(int argc, char* argv[])
    return (0 == nr_failed) ? EXIT_SUCCESS : EXIT_FAILURE;
 }
 
+
+
+#define MAX_RESOURCE_LIST_ENTRY 512
+
+int  check_for_same_file_content(char* file1Path, char* file2Path)
+{
+    int ret = 0;
+    int rval = 1;
+    int handle1 = 0;
+    int handle2 = 0;
+    char* resourceList = NULL;
+    int listSize = 0;
+    PersistenceConfigurationKey_s psConfig1, psConfig2;
+
+    if((NULL == file1Path) || (NULL == file2Path))
+    {
+        return 0;
+    }
+
+    //Open database
+    handle1 = persComRctOpen(file1Path, 0x0);
+    if(handle1 < 0)
+    {
+        return 0;
+    }
+
+    handle2 = persComRctOpen(file2Path, 0x0);
+    if(handle2 < 0)
+    {
+       (void)persComRctClose(handle1);
+        return 0;
+    }
+
+    listSize = persComRctGetSizeResourcesList(handle1);
+    if(listSize != 0)
+    {
+       if(listSize > 0)
+       {
+          resourceList = (char*) malloc(listSize);
+          if(resourceList != NULL)
+          {
+             ret = persComRctGetResourcesList(handle1, resourceList, listSize);
+             if(ret > 0)
+             {
+                int i = 0, idx = 0, numResources = 0, doContinue = 1;
+                int resourceStartIdx[MAX_RESOURCE_LIST_ENTRY] = {0};
+
+                resourceStartIdx[idx] = 0; // initial start
+
+                for(i=1; i<listSize; i++ )
+                {
+                   if(resourceList[i]  == '\0')
+                   {
+                      numResources++;
+                      resourceStartIdx[++idx] = i+1;
+                      if(idx > MAX_RESOURCE_LIST_ENTRY)
+                      {
+                         doContinue = 0;
+                         break;
+                      }
+                   }
+                }
+
+                if(doContinue == 1)
+                {
+                   for(i=0; i<numResources; i++)
+                   {
+                      memset(psConfig1.custom_name, 0, sizeof(psConfig1.custom_name));
+                      memset(psConfig1.customID, 0, sizeof(psConfig1.customID));
+                      memset(psConfig1.reponsible, 0, sizeof(psConfig1.reponsible));
+
+                      memset(psConfig2.custom_name, 0, sizeof(psConfig2.custom_name));
+                      memset(psConfig2.customID, 0, sizeof(psConfig2.customID));
+                      memset(psConfig2.reponsible, 0, sizeof(psConfig2.reponsible));
+
+                      //printf("RCT content [%d]: %s\n", i, &resourceList[resourceStartIdx[i]]);
+
+                      ret = persComRctRead(handle1, &resourceList[resourceStartIdx[i]],  &psConfig1);
+                      if(ret !=  sizeof(psConfig1))
+                      {
+                         break;
+                      }
+
+                      ret = persComRctRead(handle2, &resourceList[resourceStartIdx[i]],  &psConfig2);
+                      if(ret !=  sizeof(psConfig2))
+                      {
+                         rval = 0;
+                         break;
+                      }
+
+                      if(0 != memcmp(&psConfig1, &psConfig2, sizeof(psConfig1)))
+                      {
+                         rval = 0;
+                         break;
+                      }
+                   }
+                }
+                else
+                {
+                   printf("Num of array entries exceeded\n");
+                   rval = 0;
+                }
+             }
+             free(resourceList);
+          }
+          else
+          {
+             rval = 0;  // failure
+          }
+       }
+       else
+       {
+          rval = 0;  // failure
+       }
+    }
+    else
+    {
+       // empty src database, check if other database is also empty
+       listSize = persComRctGetSizeResourcesList(handle2);
+       if(listSize != 0)
+       {
+          rval = 0;  // other database is not empty ==> databases are not identicyl
+       }
+    }
+
+    //Close database
+    ret = persComRctClose(handle1);
+    if (ret != 0)
+    {
+        //DLT_LOG(persAdminSvcDLTCtx, DLT_LOG_ERROR, DLT_STRING(LT_HDR), DLT_STRING("Not able to close : "), DLT_STRING(file1Path));
+    }
+
+    ret = persComRctClose(handle2);
+    if (ret != 0)
+    {
+        //DLT_LOG(persAdminSvcDLTCtx, DLT_LOG_ERROR, DLT_STRING(LT_HDR), DLT_STRING("Not able to close : "), DLT_STRING(file2Path));
+    }
+
+    return rval;
+}

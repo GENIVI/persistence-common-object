@@ -237,7 +237,7 @@ qhasharr_t *qhasharr(void *memory, size_t memsize)
          return NULL;
       }
 // Set memory.
-      memset((void *) data, 0, memsize);
+      //memset((void *) data, 0, memsize);   // remove memset in order to get all the memory NOT preallocated
       data->maxslots = maxslots;
       data->usedslots = 0;
       data->num = 0;
