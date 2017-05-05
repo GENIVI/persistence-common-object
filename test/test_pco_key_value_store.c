@@ -3334,7 +3334,7 @@ START_TEST(test_Compare_RCT)
    int result = 0;
 
    // extract test RCT databases
-   result = doUncompress("/usr/local/var/rct_compare.tar.gz", "/tmp/");
+   result = doUncompress(PERS_TEST_DATA_DIR"/rct_compare.tar.gz", "/tmp/");
    fail_unless(result == 0, "Failed to extract test data");
 
 
