@@ -215,6 +215,19 @@ fi
 
 
 
+dnl **********************************************
+dnl *** location of pidfile, default is /var/run *
+dnl **********************************************
+AC_ARG_WITH([pidfilelocation],
+              [AS_HELP_STRING([--with-pidfilelocation=path of pidfile],[Path to the pifile])],
+              [with_pidfilelocation=$withval],[with_pidfilelocation="/var/run"])
+
+AC_SUBST([pidfilelocationpath], [$with_pidfilelocation])
+AC_MSG_NOTICE([PID File Path: $pidfilelocationpath])
+AC_DEFINE_UNQUOTED(PIDFILEDIR, "$pidfilelocationpath", "location for pidfile")
+
+
+
 ######################################################################
 ### max numberr of database slots, default is 100.000
 ######################################################################

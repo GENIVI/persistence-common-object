@@ -20,6 +20,9 @@
 #define _FILE_OFFSET_BITS 64
 #define KISSDB_HEADER_SIZE sizeof(Header_s)
 
+#define FILE_DIR_NOT_SELF_OR_PARENT(s) ((s)[0]!='.'&&(((s)[1]!='.'||(s)[2]!='\0')||(s)[1]=='\0'))
+
+
 #include "./kissdb.h"
 #include "../crc32.h"
 #include <string.h>
@@ -35,6 +38,7 @@
 #include <sys/time.h>
 #include <semaphore.h>
 #include <dlt.h>
+#include <dirent.h>
 #include "persComErrors.h"
 
 //
@@ -539,6 +543,17 @@ int KISSDB_open(KISSDB* db, const char* path, int openMode, int writeMode, uint1
                DLT_LOG(persComLldbDLTCtx, DLT_LOG_WARN, DLT_STRING(__FUNCTION__); DLT_STRING(":End datablock check / recovery!"));
             }
          }
+      }
+   }
+   else
+   {
+      // we are not the shm creator, now check if someone else has the file open
+      // if num of open fd's and ref count does not match, report an error and don't increment ref counter
+      //printf("#### Database closed  N O T  O K - %d!!!!!\n\n", db->shared->refCount);
+      if(searchOpenFDs(path) != db->shared->refCount)
+      {
+         Kdb_unlock(&db->shared->rwlock);
+         return KISSDB_ERROR_APPCRASH;
       }
    }
    Kdb_unlock(&db->shared->rwlock);
@@ -1510,6 +1525,98 @@ int checkErrorFlags(KISSDB* db)
    return 0;
 }
 
+
+
+int searchProcFileSys(pid_t pid, const char* path)
+{
+   int rval = 0;
+   DIR* procdir;
+   struct dirent* procDirEnt;
+   char procPidDir[128] = {0};
+
+   memset(procPidDir, 0, 128);
+   snprintf(procPidDir, 128, "/proc/%d/fd", pid);
+
+   if((procdir = opendir(procPidDir)) != NULL)  // search for open fd's
+   {
+      for(procDirEnt = readdir(procdir); NULL != procDirEnt; procDirEnt = readdir(procdir))
+      {
+         if(FILE_DIR_NOT_SELF_OR_PARENT(procDirEnt->d_name))
+         {
+            char buffer[128] = {0};
+            char fullPath[256] = {0};
+            memset(buffer, 0, 128);
+            memset(fullPath, 0, 256);
+
+            snprintf(fullPath, 256, "%s/%s", procPidDir, procDirEnt->d_name);
+            if(readlink(fullPath, buffer, 128) != -1)
+            {
+               if(strcmp(path, buffer) == 0)
+               {
+                  //printf("   FOUND         [%d]: %s | %s | %s\n", pid, path, fullPath, buffer);
+                  rval = 1;
+                  break;
+               }
+            }
+            else
+            {
+               printf("Error readlink: %s\n", strerror(errno));
+            }
+         }
+      }
+      closedir(procdir);
+   }
+
+   return rval;
+}
+
+
+int searchOpenFDs(const char* path)
+{
+   DIR* dir;
+   struct dirent* ent;
+   int rval = 0;
+   int fd = -1;
+
+   if ((dir = opendir(PIDFILEDIR)) != NULL)  // search for pidfiles
+   {
+      for(ent = readdir(dir); NULL != ent; ent = readdir(dir))
+      {
+         if(FILE_DIR_NOT_SELF_OR_PARENT(ent->d_name))
+         {
+            if(strstr(ent->d_name, PIDFILE_PREFIX) != NULL)
+            {
+               // extract the PID form filename
+               char pidArray[10] = {0};
+               char* pidArrayPtr = pidArray;
+               pid_t pid = 0;
+               int start = strlen(PIDFILE_PREFIX);
+               memset(pidArray, 0, 10);
+
+               while(ent->d_name[start] != '.')
+               {
+                  *(pidArrayPtr)++ = ent->d_name[start++];
+               }
+               pid = atoi(pidArray);
+               if(getpid() != pid) // check only other pids not own
+               {
+                  if(searchProcFileSys(pid, path) == 1)
+                  {
+                     rval++;  // count number of open fd's
+                  }
+               }
+            }
+         }
+      }
+      closedir(dir);
+   }
+   else
+   {
+      printf("Failed to open directory %s: %s\n", PIDFILEDIR, strerror(errno));
+   }
+
+   return rval;
+}
 
 int verifyHashtableCS(KISSDB* db)
 {

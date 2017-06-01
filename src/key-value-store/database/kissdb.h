@@ -62,6 +62,9 @@ extern "C" {
 #endif
 
 
+#define PIDFILE_PREFIX "perslib_"
+#define PIDFILE_TEMPLATE PIDFILEDIR "/" PIDFILE_PREFIX"%d.pid"   // PIDFILEDIR is defined via configure switch -pidfiledir (default is /var/run if not set)
+
 /**
  * Version: 2.3
  *
@@ -247,6 +250,12 @@ typedef struct {
  * buffer where data should be returned is too small
  */
 #define KISSDB_ERROR_WRONG_BUFSIZE -13
+
+
+/**
+ * don't increment ref counter, possible application detected
+ */
+#define KISSDB_ERROR_APPCRASH -14
    
 
 /**

@@ -45,25 +45,72 @@
 #define READ_SIZE    1024
 #define MaxAppNameLen 256
 
+#define PIDFILE_PREFIX "perslib_"
+#define PIDFILE_TEMPLATE PIDFILEDIR "/" PIDFILE_PREFIX"%d.pid"   // PIDFILEDIR is defined via configure switch -pidfiledir (default is /var/run if not set)
+
 /// application id
 char gTheAppId[MaxAppNameLen] = { 0 };
 
 // definition of weekday
 char* dayOfWeek[] = { "Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday" };
 
+static char gPidfilename[40] = {0};
+
+// forward declaration
+int  check_for_same_file_content(char* file1Path, char* file2Path);
+
+
+
+static void createPidFile(pid_t pid)
+{
+   int fd = -1;
+
+   // create pidfile
+   memset(gPidfilename, 0, 40);
+   snprintf(gPidfilename, 40, PIDFILE_TEMPLATE, pid);
+
+   fd = open(gPidfilename, O_CREAT|O_RDWR, S_IRUSR | S_IWUSR | S_IRGRP | S_IWGRP | S_IROTH | S_IWOTH );
+   if(fd != -1)
+   {
+      //printf("#### TEST: Created pidfile: %s\n", gPidfilename);
+      close(fd);
+      fd = -1;
+   }
+   else
+   {
+      printf("#### TEST: Failed to create pidfile: %s - error: %s\n", gPidfilename, strerror(errno));
+   }
+}
 
 
 void data_setup(void)
 {
    //ssd
    DLT_REGISTER_APP("PCOt", "tests the persistence common object library");
+
+   createPidFile(getpid());
 }
 
 void data_teardown(void)
 {
    DLT_UNREGISTER_APP();
+
+   remove(gPidfilename);
 }
 
+
+
+void data_setup_thread(void)
+{
+   //ssd
+   DLT_REGISTER_APP("PCOt", "tests the persistence common object library");
+}
+
+
+void data_teardown_thread(void)
+{
+   DLT_UNREGISTER_APP();
+}
 
 
 START_TEST(test_OpenLocalDB)
@@ -1922,6 +1969,8 @@ START_TEST(test_CachedConcurrentAccess)
    //Cleaning up testdata folder
    remove("/tmp/cached-concurrent.db");
 
+   printf("Test PID: %d\n", getpid());
+
    pid = fork();
    if (pid == 0)
    {
@@ -1937,6 +1986,8 @@ START_TEST(test_CachedConcurrentAccess)
       int i =0;
 
       snprintf(childSysTimeBuffer, 256, "%s", "1");
+
+      createPidFile(getpid());
 
       //wait so that father has already opened the db
       sleep(3);
@@ -1969,10 +2020,13 @@ START_TEST(test_CachedConcurrentAccess)
       fail_unless(ret == 0, "Child failed to close database: retval: [%d]", ret);
 
       DLT_UNREGISTER_APP();
+
+      remove(gPidfilename);
       _exit(EXIT_SUCCESS);
    }
    else if (pid > 0)
    {
+
       /*parent*/
       //printf("Started father process with PID: [%d] \n", pid);
       int handle = 0;
@@ -1981,6 +2035,8 @@ START_TEST(test_CachedConcurrentAccess)
       char key[128] = { 0 };
       char sysTimeBuffer[256] = { 0 };
       int i =0;
+
+      createPidFile(getpid());
 
       handle = persComDbOpen("/tmp/cached-concurrent.db", 0x1); //create test.db if not present
       fail_unless(handle >= 0, "Father failed to create non existent lDB: retval: [%d]", ret);
@@ -2024,6 +2080,8 @@ START_TEST(test_CachedConcurrentAccess)
       }
       fail_unless(ret == 0, "Father failed to close database: retval: [%d]", ret);
 
+      remove(gPidfilename);
+
       _exit(EXIT_SUCCESS);
    }
 }
@@ -2056,6 +2114,8 @@ START_TEST(test_CachedConcurrentAccess2)
       char key[128] = { 0 };
       char write2[READ_SIZE] = { 0 };
       int i =0;
+
+      createPidFile(getpid());
 
       snprintf(childSysTimeBuffer, 256, "%s", "1");
 
@@ -2101,6 +2161,8 @@ START_TEST(test_CachedConcurrentAccess2)
       fail_unless(ret == 0, "Child failed to close database: retval: [%d]", ret);
 
       DLT_UNREGISTER_APP();
+
+      remove(gPidfilename);
       _exit(EXIT_SUCCESS);
    }
    else if (pid > 0)
@@ -2113,6 +2175,8 @@ START_TEST(test_CachedConcurrentAccess2)
       char key[128] = { 0 };
       char sysTimeBuffer[256] = { 0 };
       int i =0;
+
+      createPidFile(getpid());
 
       //wait until child (CREATOR) has opened the database
       sleep(1);
@@ -2160,7 +2224,7 @@ START_TEST(test_CachedConcurrentAccess2)
          printf("persComDbClose() failed: [%d] \n", ret);
       }
       fail_unless(ret == 0, "Father failed to close database: retval: [%d]", ret);
-
+      remove(gPidfilename);
       _exit(EXIT_SUCCESS);
    }
 }
@@ -2924,13 +2988,15 @@ START_TEST(test_WriteThrough)
          char write2[READ_SIZE] = { 0 };
          int i =0;
 
+         createPidFile(getpid());
+
          snprintf(childSysTimeBuffer, 256, "%s", "1");
 
          //wait so that father has already opened the db
          //sleep(3);
 
          //open db after father (in order to use the hashtable in shared memory)
-         handle = persComDbOpen("/tmp/writethrough-concurrent.db", 0x3); //create test.db if not present and writethrough mode
+         handle = persComDbOpen("/tmp/writethrough-concurrent.db", 0x3 | 0x08); //create test.db if not present and writethrough mode
          fail_unless(handle >= 0, "Child failed to create non existent lDB: retval: [%d]", ret);
 
          //read the new key written by the father from cache
@@ -2957,6 +3023,8 @@ START_TEST(test_WriteThrough)
          fail_unless(ret == 0, "Child failed to close database: retval: [%d]", ret);
 
          DLT_UNREGISTER_APP();
+
+         remove(gPidfilename);
          _exit(EXIT_SUCCESS);
       }
       else if (pid > 0)
@@ -2970,7 +3038,9 @@ START_TEST(test_WriteThrough)
          char sysTimeBuffer[256] = { 0 };
          int i =0;
 
-         handle = persComDbOpen("/tmp/writethrough-concurrent.db", 0x3); //create test.db if not present and writethrough mode
+         createPidFile(getpid());
+
+         handle = persComDbOpen("/tmp/writethrough-concurrent.db", 0x3| 0x08); //create test.db if not present and writethrough mode
          fail_unless(handle >= 0, "Father failed to create non existent lDB: retval: [%d]", ret);
 
          //Write data to cache (cache gets created here)
@@ -3011,7 +3081,7 @@ START_TEST(test_WriteThrough)
             printf("persComDbClose() failed: [%d] \n", ret);
          }
          fail_unless(ret == 0, "Father failed to close database: retval: [%d]", ret);
-
+         remove(gPidfilename);
          _exit(EXIT_SUCCESS);
       }
 
@@ -3329,12 +3399,237 @@ static int doUncompress(const char* extractFrom, const char* extractTo)
 }
 
 
+START_TEST(test_CrashingApp)
+{
+   int ret = 0, handle = -1, i = 0;
+   char key[128] = {0};
+   char writeData[128] = {0};
+
+   createPidFile(getpid());
+   //printf("Crashing App - pid: [%d]==> \n", getpid());
+
+   //Cleaning up
+   remove("/dev/shm/_tmp_attachToExistingCacheFragment_db-cache");
+   remove("/dev/shm/_tmp_attachToExistingCacheFragment_db-ht");
+   remove("/dev/shm/_tmp_attachToExistingCacheFragment_db-shm-info");
+   remove("/tmp/attachToExistingCacheFragment.db");
+
+   //
+   // open database and fill with content
+   //
+   handle = persComDbOpen("/tmp/attachToExistingCacheFragment.db", 0x1);   //write cached create database
+   fail_unless(handle >= 0, "Failed to open database / create open: retval: [%d]", handle);
+
+   ret = persComDbWriteKey(handle, "Key_A", "some_Key_A_data", strlen("some_Key_A_data"));
+   fail_unless(ret == strlen("some_Key_A_data"), "Wrong write size");
+   ret = persComDbWriteKey(handle, "Key_BB", "some_Key_BB_data", strlen("some_Key_BB_data"));
+   fail_unless(ret == strlen("some_Key_BB_data"), "Wrong write size");
+   ret = persComDbWriteKey(handle, "Key_CCC", "some_Key_CCC_data", strlen("some_Key_CCC_data"));
+   fail_unless(ret == strlen("some_Key_CCC_data"), "Wrong write size");
+
+   ret = persComDbClose(handle);
+   fail_unless(ret == 0, "Failed to close database: retval: [%d]", ret);
+
+
+   //
+   // now open again and write data cache
+   //
+   handle = persComDbOpen("/tmp/attachToExistingCacheFragment.db", 0x1);   //write cached create database
+   fail_unless(handle >= 0, "Failed to open database / create open: retval: [%d]", handle);
+
+   // write new keys
+   for(i=0; i< 400; i++)
+   {
+      memset(key, 0, 128);
+      memset(writeData, 0, 128);
+      snprintf(key, 128, "Key_in_loop_%d_%d_cache",i,i*i);
+      snprintf(writeData, 128, "DATA-%d_cache",i);
+
+      ret = persComDbWriteKey(handle, key, (char*) writeData, strlen(writeData));
+      fail_unless(ret == strlen(writeData), "Wrong write size");
+   }
+
+   // now crash is simulated (SIGILL) to end the process ==> next test process (test_RestartedApp) tries to read data from cache and from database file
+   raise(SIGILL);
+}
+END_TEST
+
+
+
+
+START_TEST(test_RestartedApp)
+{
+   int ret = 0, handle = -1, i = 0;
+   char key[128] = {0};
+   char writeData[128] = {0};
+   char readData[128] = {0};
+
+   createPidFile(getpid());
+   //printf("Restarted App - pid: [%d] ==> \n", getpid());
+
+   //
+   // check if all temporary files are available
+   //
+   fail_unless(access("/dev/shm/sem._tmp_attachToExistingCacheFragment_db-sem", F_OK)  == 0);
+   fail_unless(access("/dev/shm/_tmp_attachToExistingCacheFragment_db-cache", F_OK)    == 0);
+   fail_unless(access("/dev/shm/_tmp_attachToExistingCacheFragment_db-ht", F_OK)       == 0);
+   fail_unless(access("/dev/shm/_tmp_attachToExistingCacheFragment_db-shm-info", F_OK) == 0);
+
+
+   handle = persComDbOpen("/tmp/attachToExistingCacheFragment.db", 0x1);   //write cached create database
+   fail_unless(handle >= 0, "Failed to open database / create open: retval: [%d]", handle);
+
+   //
+   // try to read data from file
+   //
+   memset(readData, 0, 128);
+   ret = persComDbReadKey(handle, "Key_A", (char*) readData, 128);
+   //printf("Read data - file - 1 - [%d]: \"%s\"\n", ret, readData);
+   fail_unless(strncmp((char*)readData, "some_Key_A_data", strlen("some_Key_A_data")) == 0, "Wrong data read - file - 1");
+   memset(readData, 0, 128);
+   ret = persComDbReadKey(handle, "Key_BB", (char*) readData, 128);
+   //printf("Read data - file - 2 - [%d]: \"%s\"\n", ret, readData);
+   fail_unless(strncmp((char*)readData, "some_Key_BB_data", strlen("some_Key_BB_data")) == 0, "Wrong data read - file - 2");
+   memset(readData, 0, 128);
+   ret = persComDbReadKey(handle, "Key_CCC", (char*) readData, 128);
+   //printf("Read data - file - 3 - [%d]: \"%s\"\n", ret, readData);
+   fail_unless(strncmp((char*)readData, "some_Key_CCC_dataa", strlen("some_Key_CCC_data")) == 0, "Wrong data - file - read 3");
+
+
+   //
+   // try to read data from cache
+   //
+   for(i=0; i< 400; i++)
+   {
+      memset(key, 0, 128);
+      memset(readData, 0, 128);
+      memset(writeData, 0, 128);
+      snprintf(key, 128, "Key_in_loop_%d_%d_cache",i,i*i);
+      snprintf(writeData, 128, "DATA-%d_cache",i); // reference data that should be read
+
+      ret = persComDbReadKey(handle, key, (char*) readData, 128);
+      //printf("Key: - %s - | Data: - %s - \n", key, readData);
+      fail_unless(strncmp((char*)readData, writeData, strlen(writeData)) == 0, "Wrong data read - cache - %d", i);
+      fail_unless(ret == strlen(writeData), "Wrong size - cache - %d", i);
+   }
+
+
+   //
+   // add new data
+   //
+   for(i=0; i< 400; i++)
+   {
+     memset(key, 0, 128);
+     memset(writeData, 0, 128);
+     snprintf(key, 128, "new_Key_in_loop_%d_%d_new",i,i*i);
+     snprintf(writeData, 128, "new_DATA-%d_new",i);
+
+     ret = persComDbWriteKey(handle, key, (char*) writeData, strlen(writeData));
+     fail_unless(ret == strlen(writeData), "Father: Wrong write size");
+   }
+
+
+   //
+   // read newly added keys
+   //
+   for(i=0; i< 400; i++)
+   {
+      memset(key, 0, 128);
+      memset(readData, 0, 128);
+      memset(writeData, 0, 128);
+      snprintf(key, 128, "new_Key_in_loop_%d_%d_new",i,i*i);
+      snprintf(writeData, 128, "new_DATA-%d_new",i); // reference data that should be read
+
+      ret = persComDbReadKey(handle, key, (char*) readData, 128);
+      fail_unless(strncmp((char*)readData, writeData, strlen(writeData)) == 0, "Wrong data read");
+      fail_unless(ret == strlen(writeData), "Wrong read size");
+   }
+
+   ret = persComDbClose(handle);
+   fail_unless(ret == 0, "Failed to close database: retval: [%d]", ret);
+
+
+   //
+   // check if all temporary files were removed
+   //
+   fail_unless(access("/dev/shm/sem._tmp_attachToExistingCacheFragment_db-sem", F_OK)  == -1);
+   fail_unless(access("/dev/shm/_tmp_attachToExistingCacheFragment_db-cache", F_OK)    == -1);
+   fail_unless(access("/dev/shm/_tmp_attachToExistingCacheFragment_db-ht", F_OK)       == -1);
+   fail_unless(access("/dev/shm/_tmp_attachToExistingCacheFragment_db-shm-info", F_OK) == -1);
+
+
+   //
+   // open database again and read all keys
+   //
+   handle = persComDbOpen("/tmp/attachToExistingCacheFragment.db", 0x1);   //write cached create database
+   fail_unless(handle >= 0, "Failed to open database / create open: retval: [%d]", handle);
+
+   // data previously already in database
+   memset(readData, 0, 128);
+   ret = persComDbReadKey(handle, "Key_A", (char*) readData, 128);
+   fail_unless(strncmp((char*)readData, "some_Key_A_data", strlen("some_Key_A_data")) == 0, "Wrong data read - file - 1");
+   memset(readData, 0, 128);
+   ret = persComDbReadKey(handle, "Key_BB", (char*) readData, 128);
+   fail_unless(strncmp((char*)readData, "some_Key_BB_data", strlen("some_Key_BB_data")) == 0, "Wrong data read - file - 2");
+   memset(readData, 0, 128);
+   ret = persComDbReadKey(handle, "Key_CCC", (char*) readData, 128);
+   fail_unless(strncmp((char*)readData, "some_Key_CCC_dataa", strlen("some_Key_CCC_data")) == 0, "Wrong data - file - read 3");
+
+   // data previously in cache
+   for(i=0; i< 400; i++)
+   {
+     memset(key, 0, 128);
+     memset(readData, 0, 128);
+     memset(writeData, 0, 128);
+     snprintf(key, 128, "Key_in_loop_%d_%d_cache",i,i*i);
+     snprintf(writeData, 128, "DATA-%d_cache",i); // reference data that should be read
+
+     ret = persComDbReadKey(handle, key, (char*) readData, 128);
+     //printf("Key: - %s - | Data: - %s - \n", key, readData);
+     fail_unless(strncmp((char*)readData, writeData, strlen(writeData)) == 0, "Wrong data read - cache - %d", i);
+     fail_unless(ret == strlen(writeData), "Wrong size - cache - %d", i);
+   }
+
+   // newly added data
+   for(i=0; i< 400; i++)
+   {
+      memset(key, 0, 128);
+      memset(readData, 0, 128);
+      memset(writeData, 0, 128);
+      snprintf(key, 128, "new_Key_in_loop_%d_%d_new",i,i*i);
+      snprintf(writeData, 128, "new_DATA-%d_new",i); // reference data that should be read
+
+      ret = persComDbReadKey(handle, key, (char*) readData, 128);
+      fail_unless(strncmp((char*)readData, writeData, strlen(writeData)) == 0, "Wrong data read");
+      fail_unless(ret == strlen(writeData), "Wrong read size");
+   }
+
+   ret = persComDbClose(handle);
+   fail_unless(ret == 0, "Failed to close database: retval: [%d]", ret);
+
+   //
+   // check if all temporary files were removed
+   //
+   fail_unless(access("/dev/shm/sem._tmp_attachToExistingCacheFragment_db-sem", F_OK)  == -1);
+   fail_unless(access("/dev/shm/_tmp_attachToExistingCacheFragment_db-cache", F_OK)    == -1);
+   fail_unless(access("/dev/shm/_tmp_attachToExistingCacheFragment_db-ht", F_OK)       == -1);
+   fail_unless(access("/dev/shm/_tmp_attachToExistingCacheFragment_db-shm-info", F_OK) == -1);
+
+
+   remove(gPidfilename);
+   //printf("Restarted App <== \n\n");
+}
+END_TEST
+
+
+
+
 START_TEST(test_Compare_RCT)
 {
    int result = 0;
 
    // extract test RCT databases
-   result = doUncompress(PERS_TEST_DATA_DIR"/rct_compare.tar.gz", "/tmp/");
+   result = doUncompress("/usr/local/var/rct_compare.tar.gz", "/tmp/");
    fail_unless(result == 0, "Failed to extract test data");
 
 
@@ -3385,6 +3680,7 @@ START_TEST(test_Compare_RCT)
    fail_unless(result == 0, "Failed: Null pointer in RCT filename reported as identical");
 }
 END_TEST
+
 
 static Suite* persistenceCommonLib_suite()
 {
@@ -3514,8 +3810,9 @@ static Suite* persistenceCommonLib_suite()
    tcase_add_checked_fixture(tc_persCacheSize, data_setup, data_teardown);
 
    suite_add_tcase(s, tc_persCachedConcurrentAccess);
-   tcase_add_checked_fixture(tc_persCachedConcurrentAccess, data_setup, data_teardown);
-   //suite_add_tcase(s, tc_persCachedConcurrentAccess2);
+   tcase_add_checked_fixture(tc_persCachedConcurrentAccess, data_setup_thread, data_teardown_thread);
+   suite_add_tcase(s, tc_persCachedConcurrentAccess2);
+   tcase_add_checked_fixture(tc_persCachedConcurrentAccess2, data_setup_thread, data_teardown_thread);
 
    suite_add_tcase(s, tc_BadParameters);
    tcase_add_checked_fixture(tc_BadParameters, data_setup, data_teardown);
@@ -3536,18 +3833,41 @@ static Suite* persistenceCommonLib_suite()
    tcase_add_checked_fixture(tc_MultipleWrites, data_setup, data_teardown);
 
    suite_add_tcase(s, tc_WriteThrough);
-   tcase_add_checked_fixture(tc_WriteThrough, data_setup, data_teardown);
+   tcase_add_checked_fixture(tc_WriteThrough, data_setup_thread, data_teardown_thread);
 
    suite_add_tcase(s, tc_AddKey_DeleteKey_AddShorterKeyName);
 
    suite_add_tcase(s, tc_Compare_RCT);
 #else
 
+
 #endif
 
    return s;
 }
 
+
+static Suite* persistenceCommonLib_suite_appcrash()
+{
+   Suite* s = suite_create("Persistence-common-object-test app crash");
+
+   TCase* tc_CrashingApp = tcase_create("CrashingApp");
+   tcase_set_timeout(tc_CrashingApp, 120);
+   tcase_add_test_raise_signal(tc_CrashingApp, test_CrashingApp, SIGILL);
+
+   TCase* tc_RestartedApp = tcase_create("RestartedApp");
+   tcase_add_test(tc_RestartedApp, test_RestartedApp);
+   tcase_set_timeout(tc_RestartedApp, 120);
+
+
+   suite_add_tcase(s, tc_CrashingApp);
+   tcase_add_checked_fixture(tc_CrashingApp, data_setup_thread, data_teardown_thread);
+
+   suite_add_tcase(s, tc_RestartedApp);
+   tcase_add_checked_fixture(tc_RestartedApp, data_setup_thread, data_teardown_thread);
+
+   return s;
+}
 
 
 void* kvdbOpenThread(void* userData)
@@ -3632,178 +3952,230 @@ void doSemLockTimeoutTest()
 }
 
 
+void allocateSharedMemeory()
+{
+   int handle = -1, i = 0, ret = -1;
+   char key[128] = {0};
+   char writeData[128] = {0};
+   char readData[128] = {0};
+
+   //first create the database
+   printf("Do Open\n");
+   handle = persComDbOpen("/tmp/showAllocatedSharedMemory.db", 0x1);   //write cached create database
+
+   printf("Now Write\n");
+   for(i=0; i< 200; i++)
+   {
+      memset(key, 0, 128);
+      memset(writeData, 0, 128);
+      snprintf(key, 128, "new_Key_in_loop_%d_%d_new",i,i*i);
+      snprintf(writeData, 128, "new_DATA-%d_new",i);
+
+      ret = persComDbWriteKey(handle, key, (char*) writeData, strlen(writeData));
+      printf("+");
+      fflush(stdout);
+      usleep(200000);
+   }
+
+   printf("Write - end => sleep\n");
+   sleep(10);
+
+
+   printf("Close\n");
+   if(handle >= 0 )
+   {
+      (void)persComDbClose(handle);
+   }
+}
+
+
+
+
 
 int main(int argc, char* argv[])
 {
-   int nr_failed = 0, nr_run = 0, i = 0;
-   TestResult** tResult;
+   int nr_failed = 0, nr_failed2 = 0, nr_run = 0, i = 0;
 
-   Suite* s = persistenceCommonLib_suite();
-   SRunner* sr = srunner_create(s);
+   printf("Main PID: %d\n", getpid());
 
    if(argc == 1)
    {
+      TestResult** tResult;
+
+      Suite* s          = persistenceCommonLib_suite();
+      Suite * sAppCrash = persistenceCommonLib_suite_appcrash();
+
+      SRunner* sr          = srunner_create(s);
+      SRunner * srAppCrash = srunner_create(sAppCrash);
+
       srunner_set_xml(sr, "/tmp/persistenceCommonObjectTest.xml");
       srunner_set_log(sr, "/tmp/persistenceCommonObjectTest.log");
-      srunner_run_all(sr, /*CK_NORMAL*/CK_VERBOSE);
 
+      srunner_set_fork_status(srAppCrash, CK_FORK);
+      srunner_set_xml(srAppCrash, "/tmp/persistenceCommonObjectTest_AC.xml");
+      srunner_set_log(srAppCrash, "/tmp/persistenceCommonObjectTest_AC.log");
+
+      // run normal tests
+      srunner_run_all(sr, CK_VERBOSE);
       nr_failed = srunner_ntests_failed(sr);
       nr_run = srunner_ntests_run(sr);
-
       tResult = srunner_results(sr);
       for (i = 0; i < nr_run; i++)
       {
          (void) tr_rtype(tResult[i]);  // get status of each test
       }
-
       srunner_free(sr);
+
+      // run app crash tests
+      srunner_run_all(srAppCrash, CK_VERBOSE);
+      nr_failed2 = srunner_ntests_failed(srAppCrash);
+      nr_run = srunner_ntests_run(srAppCrash);
+      tResult = srunner_results(srAppCrash);
+      srunner_free(srAppCrash);
    }
    else
    {
-      doSemLockTimeoutTest();
+      if(atoi(argv[1]) == 1)
+      {
+         doSemLockTimeoutTest();
+      }
+      else if(atoi(argv[1]) == 2)
+      {
+         allocateSharedMemeory();
+      }
    }
 
    dlt_free();
-   return (0 == nr_failed) ? EXIT_SUCCESS : EXIT_FAILURE;
+   return (0==nr_failed && 0==nr_failed2)?EXIT_SUCCESS:EXIT_FAILURE;
 }
-
 
 
 #define MAX_RESOURCE_LIST_ENTRY 512
 
 int  check_for_same_file_content(char* file1Path, char* file2Path)
 {
-    int ret = 0;
-    int rval = 1;
-    int handle1 = 0;
-    int handle2 = 0;
-    char* resourceList = NULL;
-    int listSize = 0;
-    PersistenceConfigurationKey_s psConfig1, psConfig2;
+   int ret            = 0;
+   int rval        = 1;
+   int handle1        = -1;
+   int handle2        = -1;
+   char* resourceList = NULL;
+   int listSize       = 0;
+   PersistenceConfigurationKey_s psConfig1, psConfig2;
 
-    if((NULL == file1Path) || (NULL == file2Path))
-    {
-        return 0;
-    }
 
-    //Open database
-    handle1 = persComRctOpen(file1Path, 0x0);
-    if(handle1 < 0)
-    {
-        return 0;
-    }
+   if((NULL == file1Path) || (NULL == file2Path))
+   {
+      // DLT_LOG(persAdminSvcDLTCtx, DLT_LOG_ERROR, DLT_STRING(LT_HDR), DLT_STRING("Invalid parameters in persadmin_check_for_same_file_content call."));
+       return 0;
+   }
 
-    handle2 = persComRctOpen(file2Path, 0x0);
-    if(handle2 < 0)
-    {
+
+   //Open database
+   handle1 = persComRctOpen(file1Path, 0x0);
+   if(handle1 < 0)
+   {
+      // DLT_LOG(persAdminSvcDLTCtx, DLT_LOG_ERROR, DLT_STRING(LT_HDR), DLT_STRING("Not able to open : "), DLT_STRING(file1Path));
+       return 0;
+   }
+
+   handle2 = persComRctOpen(file2Path, 0x0);
+   if(handle2 < 0)
+   {
+      // DLT_LOG(persAdminSvcDLTCtx, DLT_LOG_ERROR, DLT_STRING(LT_HDR), DLT_STRING("Not able to open : "), DLT_STRING(file2Path));
        (void)persComRctClose(handle1);
-        return 0;
-    }
+       return 0;
+   }
 
-    listSize = persComRctGetSizeResourcesList(handle1);
-    if(listSize != 0)
-    {
-       if(listSize > 0)
+   listSize = persComRctGetSizeResourcesList(handle1);
+   if(listSize > 0)
+   {
+       resourceList = (char*) malloc(listSize);
+       if(resourceList != NULL)
        {
-          resourceList = (char*) malloc(listSize);
-          if(resourceList != NULL)
-          {
-             ret = persComRctGetResourcesList(handle1, resourceList, listSize);
-             if(ret > 0)
-             {
-                int i = 0, idx = 0, numResources = 0, doContinue = 1;
-                int resourceStartIdx[MAX_RESOURCE_LIST_ENTRY] = {0};
 
-                resourceStartIdx[idx] = 0; // initial start
+           // resourceList elements are characters ended with '\0'
+           ret = persComRctGetResourcesList(handle1, resourceList, listSize);
+           if(ret > 0)
+           {
+               const char* currentResource = resourceList;
+               ptrdiff_t currentIndex = 0;
 
-                for(i=1; i<listSize; i++ )
-                {
-                   if(resourceList[i]  == '\0')
+               while (currentIndex < listSize)
+               {
+                   memset(psConfig1.custom_name, 0, sizeof(psConfig1.custom_name));
+                   memset(psConfig1.customID, 0, sizeof(psConfig1.customID));
+                   memset(psConfig1.reponsible, 0, sizeof(psConfig1.reponsible));
+
+                   memset(psConfig2.custom_name, 0, sizeof(psConfig2.custom_name));
+                   memset(psConfig2.customID, 0, sizeof(psConfig2.customID));
+                   memset(psConfig2.reponsible, 0, sizeof(psConfig2.reponsible));
+
+                   ret = persComRctRead(handle1, currentResource,  &psConfig1);
+                   if(ret !=  sizeof(psConfig1))
                    {
-                      numResources++;
-                      resourceStartIdx[++idx] = i+1;
-                      if(idx > MAX_RESOURCE_LIST_ENTRY)
-                      {
-                         doContinue = 0;
-                         break;
-                      }
+                      // DLT_LOG(persAdminSvcDLTCtx, DLT_LOG_ERROR, DLT_STRING(LT_HDR), DLT_STRING("persComRctRead - handle1 failed"));
+                       break;
                    }
-                }
 
-                if(doContinue == 1)
-                {
-                   for(i=0; i<numResources; i++)
+                   ret = persComRctRead(handle2, currentResource,  &psConfig2); // test if key is available in other RCT
+                   if(ret !=  sizeof(psConfig2))
                    {
-                      memset(psConfig1.custom_name, 0, sizeof(psConfig1.custom_name));
-                      memset(psConfig1.customID, 0, sizeof(psConfig1.customID));
-                      memset(psConfig1.reponsible, 0, sizeof(psConfig1.reponsible));
-
-                      memset(psConfig2.custom_name, 0, sizeof(psConfig2.custom_name));
-                      memset(psConfig2.customID, 0, sizeof(psConfig2.customID));
-                      memset(psConfig2.reponsible, 0, sizeof(psConfig2.reponsible));
-
-                      //printf("RCT content [%d]: %s\n", i, &resourceList[resourceStartIdx[i]]);
-
-                      ret = persComRctRead(handle1, &resourceList[resourceStartIdx[i]],  &psConfig1);
-                      if(ret !=  sizeof(psConfig1))
-                      {
-                         break;
-                      }
-
-                      ret = persComRctRead(handle2, &resourceList[resourceStartIdx[i]],  &psConfig2);
-                      if(ret !=  sizeof(psConfig2))
-                      {
-                         rval = 0;
-                         break;
-                      }
-
-                      if(0 != memcmp(&psConfig1, &psConfig2, sizeof(psConfig1)))
-                      {
-                         rval = 0;
-                         break;
-                      }
+                      // DLT_LOG(persAdminSvcDLTCtx, DLT_LOG_ERROR, DLT_STRING(LT_HDR), DLT_STRING("persComRctRead - handle2 failed"));
+                       rval = 0; // key not found, end loop and return false  ==> databases are not identical
+                       break;
                    }
-                }
-                else
-                {
-                   printf("Num of array entries exceeded\n");
-                   rval = 0;
-                }
-             }
-             free(resourceList);
-          }
-          else
-          {
-             rval = 0;  // failure
-          }
+
+                   if(memcmp(&psConfig1, &psConfig2, sizeof(psConfig1)) != 0)    // test if value of keys are matching
+                   {
+                      // DLT_LOG(persAdminSvcDLTCtx, DLT_LOG_ERROR, DLT_STRING(LT_HDR), DLT_STRING("Data does not match"));
+                       rval = 0; // no match, end loop and return false ==> databases are not identical
+                       break;
+                   }
+
+                   currentResource = (const char*)memchr(currentResource, '\0', listSize - currentIndex);
+                   if (currentResource == NULL)
+                   {
+                       break;
+                   }
+                   currentResource++;
+                   currentIndex = currentResource - resourceList;
+               }
+           }
+           free(resourceList);
        }
        else
        {
-          rval = 0;  // failure
+          // DLT_LOG(persAdminSvcDLTCtx, DLT_LOG_ERROR, DLT_STRING(LT_HDR), DLT_STRING("malloc failed"));
+           rval = 0;
        }
-    }
-    else
-    {
+   }
+   else if (listSize < 0)
+   {
+      // DLT_LOG(persAdminSvcDLTCtx, DLT_LOG_ERROR, DLT_STRING(LT_HDR), DLT_STRING("persComRctGetSizeResourcesList error"));
+       rval = 0;
+   }
+   else
+   {
        // empty src database, check if other database is also empty
        listSize = persComRctGetSizeResourcesList(handle2);
        if(listSize != 0)
        {
-          rval = 0;  // other database is not empty ==> databases are not identicyl
+          // DLT_LOG(persAdminSvcDLTCtx, DLT_LOG_ERROR, DLT_STRING(LT_HDR), DLT_STRING("databases are not identical"));
+           rval = 0;  // other database is not empty ==> databases are not identical
        }
-    }
+   }
 
-    //Close database
-    ret = persComRctClose(handle1);
-    if (ret != 0)
-    {
-        //DLT_LOG(persAdminSvcDLTCtx, DLT_LOG_ERROR, DLT_STRING(LT_HDR), DLT_STRING("Not able to close : "), DLT_STRING(file1Path));
-    }
+   //Close database
+   ret = persComRctClose(handle1);
+   if (ret != 0)
+   {
+      // DLT_LOG(persAdminSvcDLTCtx, DLT_LOG_ERROR, DLT_STRING(LT_HDR), DLT_STRING("Not able to close : "), DLT_STRING(file1Path));
+   }
 
-    ret = persComRctClose(handle2);
-    if (ret != 0)
-    {
-        //DLT_LOG(persAdminSvcDLTCtx, DLT_LOG_ERROR, DLT_STRING(LT_HDR), DLT_STRING("Not able to close : "), DLT_STRING(file2Path));
-    }
-
-    return rval;
+   ret = persComRctClose(handle2);
+   if (ret != 0)
+   {
+       // DLT_LOG(persAdminSvcDLTCtx, DLT_LOG_ERROR, DLT_STRING(LT_HDR), DLT_STRING("Not able to close : "), DLT_STRING(file2Path));
+   }
+   return rval;
 }
