@@ -1407,9 +1407,6 @@ static void*	persIpcPASLoopThread(void *lpParam)
 {
 	uint32_t 		u32ConnectionId 	= 0;
 
-	/* Initialize glib */
-	g_type_init();			/* deprecated. Since GLib 2.36, the type system is initialized automatically and this function does nothing.*/
-
 	/* Create the main loop */
 	g_pPASMainLoop = g_main_loop_new(NIL, FALSE);
 	if(NIL == g_pPASMainLoop)
@@ -1465,9 +1462,6 @@ static void*	persIpcPASLoopThread(void *lpParam)
 static void* 	persIpcPCLLoopThread(void *lpParam)
 {
 	GError 	*pGError 			= NIL;
-
-	/* Initialize glib */
-	g_type_init();			/* deprecated. Since GLib 2.36, the type system is initialized automatically and this function does nothing.*/
 
 	/* Create the main loop */
 	g_pPCLMainLoop = g_main_loop_new(NIL, FALSE);
