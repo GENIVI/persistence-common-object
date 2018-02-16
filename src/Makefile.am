@@ -116,7 +116,6 @@ endif
 
 # Export interface description of org.genivi.persistence.admin DBus interface
 dbusinterfaces_DATA = ../dbus_specifications/org.genivi.persistence.admin.xml
-dbuspolicy_DATA = ../dbus_config/org.genivi.persistence.admin.conf
 
 EXTRA_DIST = $(dbuspolicy_DATA) \
              $(dbusinterfaces_DATA) 
