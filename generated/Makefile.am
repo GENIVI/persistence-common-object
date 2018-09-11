@@ -26,4 +26,4 @@ CLEANFILES    = PasClientNotificationGen.c  \
 # Targets to create generated sources during the build
 
 PasClientNotificationGen.c PasClientNotificationGen.h: $(top_srcdir)/dbus_specifications/org.genivi.persistence.admin.xml
-	gdbus-codegen --interface org.genivi.persistence. --c-namespace OipPersistence --generate-c-code PasClientNotificationGen $(top_srcdir)/dbus_specifications/org.genivi.persistence.admin.xml
+	gdbus-codegen --interface-prefix="org.genivi.persistence." --c-namespace="OipPersistence" --generate-c-code="PasClientNotificationGen" $(top_srcdir)/dbus_specifications/org.genivi.persistence.admin.xml
