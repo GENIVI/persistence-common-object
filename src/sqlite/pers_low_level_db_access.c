@@ -130,28 +130,6 @@ static const char *gSqlPragSynchroOff     = "PRAGMA synchronous = OFF";
 #endif
 
 
-
-/* ---------------------- local functions  --------------------------------- */
-__attribute__((constructor))
-static void pco_library_init()
-{
-   pid_t pid = getpid();
-   str_t dltContextID[16]; /* should be at most 4 characters string, but colissions occure */
-
-   /* init DLT */
-   (void) snprintf(dltContextID, sizeof(dltContextID), "Pers_%04d", pid);
-   DLT_REGISTER_CONTEXT(persComLldbDLTCtx, dltContextID, "PersCommonLLDB");
-   //DLT_SET_APPLICATION_LL_TS_LIMIT(DLT_LOG_DEBUG, DLT_TRACE_STATUS_OFF);
-   DLT_LOG(persComLldbDLTCtx, DLT_LOG_DEBUG, DLT_STRING(LT_HDR); DLT_STRING(__FUNCTION__); DLT_STRING(":"); DLT_STRING("register context PersCommonLLDB ContextID="); DLT_STRING(dltContextID));
-}
-
-__attribute__((destructor))
-static void pco_library_destroy()
-{
-   DLT_UNREGISTER_CONTEXT(persComLldbDLTCtx);
-}
-
-
 /* access to resources shared by the threads within a process */
 static void lldb_handles_InitHandle(lldb_handler_s* psHandle_inout, pers_lldb_purpose_e ePurpose, str_t const* dbPathname);
 static bool_t lldb_handles_DeinitHandle(sint_t dbHandler);
@@ -185,6 +163,21 @@ sint_t pers_lldb_open(str_t const * dbPathname, pers_lldb_purpose_e ePurpose, bo
    int openMode = SQLITE_OPEN_READWRITE;   // default mode
    sint_t rval = PERS_COM_SUCCESS;
    lldb_handler_s* pLldbHandler = NIL;
+   static bool_t bFirstCall = true ;
+
+   if (bFirstCall)
+   {
+      pid_t pid = getpid();
+      str_t dltContextID[16]; /* should be at most 4 characters string, but colissions occure */
+
+      bFirstCall = false;
+
+      /* init DLT */
+      (void) snprintf(dltContextID, sizeof(dltContextID), "Pers_%04d", pid);
+      DLT_REGISTER_CONTEXT(persComLldbDLTCtx, dltContextID, "PersCommonLLDB");
+      //DLT_SET_APPLICATION_LL_TS_LIMIT(DLT_LOG_DEBUG, DLT_TRACE_STATUS_OFF);
+      DLT_LOG(persComLldbDLTCtx, DLT_LOG_DEBUG, DLT_STRING(LT_HDR); DLT_STRING(__FUNCTION__); DLT_STRING(":"); DLT_STRING("register context PersCommonLLDB ContextID="); DLT_STRING(dltContextID));
+   }
 
 #ifdef DB_DEBUG
    DLT_LOG(persComLldbDLTCtx, DLT_LOG_INFO, DLT_STRING("pers_lldb_open -> dbPathname:" ), DLT_STRING(dbPathname), DLT_STRING("Mode:"), DLT_INT(bForceCreationIfNotPresent));
