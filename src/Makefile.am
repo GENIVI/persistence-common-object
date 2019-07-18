@@ -114,6 +114,8 @@ libpers_common_la_LIBADD += \
                              $(RAWDB_LIBS)
 endif
 
+dbuspolicy_DATA = ../dbus_config/org.genivi.persistence.admin.conf
+
 # Export interface description of org.genivi.persistence.admin DBus interface
 dbusinterfaces_DATA = ../dbus_specifications/org.genivi.persistence.admin.xml
 
