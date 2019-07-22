@@ -258,7 +258,7 @@ sint_t pers_lldb_open(str_t const* dbPathname, pers_lldb_purpose_e ePurpose, boo
                DLT_LOG(persComLldbDLTCtx, DLT_LOG_INFO,
                        DLT_STRING(LT_HDR); DLT_STRING(__FUNCTION__); DLT_STRING(": semaphore already exists: "); DLT_STRING(strerror(error)));
                //try to open existing semaphore
-               pLldbHandler->kissDb.kdbSem = sem_open(pLldbHandler->kissDb.semName, O_CREAT, 0644, 0);
+               pLldbHandler->kissDb.kdbSem = sem_open(pLldbHandler->kissDb.semName, O_CREAT, 0644, 1);
                error = errno;
                if (pLldbHandler->kissDb.kdbSem == SEM_FAILED) //open failed
                {
