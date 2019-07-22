@@ -247,7 +247,7 @@ dnl *************************************
 AC_ARG_WITH([dbuspolicydir],
         AS_HELP_STRING([--with-dbuspolicydirdir=DIR], [Directory for D-Bus system policy files]),
         [],
-        [with_dbuspolicydir=$(pkg-config --silence-errors --variable=sysconfdir dbus-1)/dbus-1/system.d])
+        [with_dbuspolicydir=$(pkg-config --silence-errors --variable=datadir dbus-1)/dbus-1/system.d])
 AC_SUBST([dbuspolicydir], [$with_dbuspolicydir])
 
 # Derive path for storing 'dbus' interface files (e. g. /usr/share/dbus-1/interfaces)
